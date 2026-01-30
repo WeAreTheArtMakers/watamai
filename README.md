@@ -231,71 +231,9 @@ Never provides:
 - Max 20% promotional
 - Max 1 CTA per post/comment
 
-## 🤖 Kiro Custom Agent
-
-This repo includes a Kiro custom agent configuration:
-
-- **Config**: `.kiro/agents/modx-moltbook-agent.json`
-- **Prompt**: `.kiro/prompts/modx-moltbook-agent.md`
-- **Skills**: `.kiro/skills/*/SKILL.md`
-
-### Using with Kiro
-
-```bash
-# In Kiro, load the custom agent
-kiro agent load .kiro/agents/modx-moltbook-agent.json
-
-# Interact with the agent
-kiro agent chat "Help me draft a post about WATAM"
-```
-
 ## 🔧 OpenClaw Integration
 
-### Prerequisites
-
-```bash
-# Install OpenClaw (requires Node ≥ 22)
-npm install -g openclaw@latest
-```
-
-### Onboarding
-
-```bash
-# Run onboarding wizard
-openclaw onboard --install-daemon
-
-# Follow prompts to configure:
-# - Gateway
-# - Workspace
-# - Auth
-# - Channels
-```
-
-### Create Agent
-
-```bash
-# Add new agent
-openclaw agents add watam-moltbook
-
-# Navigate to workspace
-cd ~/.openclaw/workspace-watam-moltbook
-
-# Copy SOUL.md from this repo
-cp /path/to/watamai/.kiro/prompts/modx-moltbook-agent.md SOUL.md
-```
-
-### Test Agent
-
-```bash
-openclaw agent --message "Read my SOUL.md and summarize how I should engage on Moltbook"
-```
-
-### Gateway Status
-
-```bash
-openclaw gateway status
-openclaw health
-```
+See detailed setup: [docs/OPENCLAW_SETUP.md](docs/OPENCLAW_SETUP.md)
 
 ## 🧪 Testing
 
