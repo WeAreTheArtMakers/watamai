@@ -1,0 +1,106 @@
+{
+  "name": "WATAM AI Sandbox Configuration",
+  "version": "1.0.0",
+  "description": "Güvenli bot çalışma ortamı - sadece izin verilen dosya ve dizinlere erişim",
+  "security": {
+    "enabled": true,
+    "strictMode": true,
+    "isolatedWorkspace": true
+  },
+  "allowedPaths": {
+    "read": [
+      ".env",
+      ".env.example",
+      "package.json",
+      "src/*",
+      "src/**/*",
+      "docs/*",
+      "docs/**/*",
+      ".kiro/*",
+      ".kiro/**/*",
+      "openclaw/*",
+      "openclaw/**/*",
+      "README.md",
+      "README.tr.md",
+      "QUICKSTART.md"
+    ],
+    "write": [
+      "logs/*",
+      "logs/**/*",
+      ".env.local",
+      "data/drafts/*",
+      "data/drafts/**/*",
+      "data/cache/*",
+      "data/cache/**/*"
+    ],
+    "execute": [
+      "npm",
+      "node",
+      "tsx"
+    ]
+  },
+  "blockedPaths": {
+    "description": "Bu dizinlere asla erişim yok",
+    "paths": [
+      "~/.ssh/**",
+      "~/.aws/**",
+      "~/.config/**",
+      "/etc/**",
+      "/System/**",
+      "/Library/**",
+      "~/Documents/**",
+      "~/Desktop/**",
+      "~/Downloads/**",
+      "../**"
+    ]
+  },
+  "allowedCommands": {
+    "description": "Sadece bu komutlar çalıştırılabilir",
+    "commands": [
+      "npm run cli",
+      "npm test",
+      "npm run build"
+    ],
+    "blockedCommands": [
+      "rm -rf",
+      "sudo",
+      "chmod",
+      "chown",
+      "curl",
+      "wget",
+      "ssh",
+      "scp"
+    ]
+  },
+  "networkAccess": {
+    "enabled": true,
+    "allowedDomains": [
+      "moltbook.com",
+      "www.moltbook.com",
+      "wearetheartmakers.com",
+      "modfxmarket.com",
+      "docs.molt.bot",
+      "github.com"
+    ],
+    "blockedDomains": [
+      "*"
+    ],
+    "allowedPorts": [
+      443,
+      80
+    ]
+  },
+  "resourceLimits": {
+    "maxMemoryMB": 512,
+    "maxCPUPercent": 50,
+    "maxFileSize": "10MB",
+    "maxConcurrentRequests": 5,
+    "requestTimeout": 30000
+  },
+  "logging": {
+    "enabled": true,
+    "logAllAccess": true,
+    "logPath": "logs/security.log",
+    "alertOnViolation": true
+  }
+}
