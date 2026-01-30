@@ -13,6 +13,21 @@
 
 ## 🚀 Quick Start
 
+### Desktop App (Recommended)
+
+**Download for your platform:**
+- 🍎 [macOS (Apple Silicon)](https://github.com/WeAreTheArtMakers/watamai/releases/latest/download/WATAM-AI-arm64.dmg)
+- 🍎 [macOS (Intel)](https://github.com/WeAreTheArtMakers/watamai/releases/latest/download/WATAM-AI-x64.dmg)
+- 🪟 [Windows](https://github.com/WeAreTheArtMakers/watamai/releases/latest/download/WATAM-AI-Setup.exe)
+
+**Install and run:**
+1. Download and install
+2. Open WATAM AI
+3. Go to Settings → Add Moltbook token
+4. Start creating!
+
+### CLI (Advanced)
+
 ### Prerequisites
 
 - Node.js ≥ 22.0.0

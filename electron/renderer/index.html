@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WATAM AI</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        <h1>🎨 WATAM AI</h1>
+        <span class="version">v1.1.0</span>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-page="dashboard">
+          <span class="icon">📊</span>
+          Dashboard
+        </button>
+        <button class="nav-item" data-page="persona">
+          <span class="icon">🤖</span>
+          Persona
+        </button>
+        <button class="nav-item" data-page="skills">
+          <span class="icon">📚</span>
+          Skills
+        </button>
+        <button class="nav-item" data-page="draft">
+          <span class="icon">✍️</span>
+          Draft Studio
+        </button>
+        <button class="nav-item" data-page="logs">
+          <span class="icon">📝</span>
+          Logs
+        </button>
+        <button class="nav-item" data-page="settings">
+          <span class="icon">⚙️</span>
+          Settings
+        </button>
+      </nav>
+
+      <div class="safe-mode">
+        <label class="switch">
+          <input type="checkbox" id="safeModeToggle" checked>
+          <span class="slider"></span>
+        </label>
+        <span class="safe-mode-label">Safe Mode</span>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Dashboard Page -->
+      <div id="dashboard" class="page active">
+        <header class="page-header">
+          <h2>Dashboard</h2>
+          <p>Agent status and recent activity</p>
+        </header>
+
+        <div class="cards">
+          <div class="card">
+            <h3>Agent Status</h3>
+            <div class="status-indicator online">
+              <span class="dot"></span>
+              <span>Ready</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Rate Limits</h3>
+            <div id="rateLimits" class="stats">
+              <div class="stat">
+                <span class="label">Posts (last hour)</span>
+                <span class="value">0/3</span>
+              </div>
+              <div class="stat">
+                <span class="label">Comments (last hour)</span>
+                <span class="value">0/20</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Security</h3>
+            <div id="securityStatus" class="stats">
+              <div class="stat">
+                <span class="label">Sandbox</span>
+                <span class="value">🔒 Enabled</span>
+              </div>
+              <div class="stat">
+                <span class="label">Violations</span>
+                <span class="value">0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Recent Activity</h3>
+          <div id="recentActivity" class="activity-list">
+            <p class="empty-state">No recent activity</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Draft Studio Page -->
+      <div id="draft" class="page">
+        <header class="page-header">
+          <h2>Draft Studio</h2>
+          <p>Create and preview posts before publishing</p>
+        </header>
+
+        <div class="draft-form">
+          <div class="form-group">
+            <label for="submolt">Submolt</label>
+            <input type="text" id="submolt" placeholder="art" value="art">
+          </div>
+
+          <div class="form-group">
+            <label for="topic">Topic</label>
+            <input type="text" id="topic" placeholder="Enter post topic">
+          </div>
+
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="includeWatam">
+              Include WATAM CTA
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button id="draftBtn" class="btn btn-primary">Generate Draft</button>
+          </div>
+        </div>
+
+        <div id="draftPreview" class="draft-preview hidden">
+          <h3>Preview</h3>
+          <div class="preview-content">
+            <div class="preview-meta">
+              <span id="previewSubmolt"></span>
+            </div>
+            <h4 id="previewTitle"></h4>
+            <div id="previewBody"></div>
+          </div>
+          <div class="preview-actions">
+            <button id="publishBtn" class="btn btn-success">Publish</button>
+            <button id="copyBtn" class="btn btn-secondary">Copy as Markdown</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings Page -->
+      <div id="settings" class="page">
+        <header class="page-header">
+          <h2>Settings</h2>
+          <p>Configure your agent</p>
+        </header>
+
+        <div class="settings-form">
+          <div class="form-group">
+            <label for="agentName">Agent Name</label>
+            <input type="text" id="agentName" placeholder="watam-agent">
+          </div>
+
+          <div class="form-group">
+            <label for="moltbookToken">Moltbook Auth Token</label>
+            <input type="password" id="moltbookToken" placeholder="Enter your token">
+            <small>Get your token from <a href="https://moltbook.com/skill.md" target="_blank">moltbook.com/skill.md</a></small>
+          </div>
+
+          <div class="form-actions">
+            <button id="saveSettingsBtn" class="btn btn-primary">Save Settings</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Logs Page -->
+      <div id="logs" class="page">
+        <header class="page-header">
+          <h2>Logs</h2>
+          <p>View agent activity and errors</p>
+        </header>
+
+        <div class="logs-container">
+          <div id="logsContent" class="logs-content">
+            <p class="empty-state">No logs yet</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Persona Page -->
+      <div id="persona" class="page">
+        <header class="page-header">
+          <h2>Persona Editor</h2>
+          <p>Customize your agent's personality</p>
+        </header>
+
+        <div class="card">
+          <p class="info-message">
+            📝 Persona editing coming in next update. For now, edit <code>.kiro/prompts/modx-moltbook-agent.md</code> directly.
+          </p>
+        </div>
+      </div>
+
+      <!-- Skills Page -->
+      <div id="skills" class="page">
+        <header class="page-header">
+          <h2>Skills Editor</h2>
+          <p>Manage agent skills and knowledge</p>
+        </header>
+
+        <div class="card">
+          <p class="info-message">
+            📚 Skills editing coming in next update. For now, edit files in <code>.kiro/skills/</code> directly.
+          </p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

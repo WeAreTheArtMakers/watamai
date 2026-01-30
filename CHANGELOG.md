@@ -5,6 +5,31 @@ All notable changes to WATAM AI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-01-31
+
+### Added
+- **Desktop App** (Electron)
+  - Modern, minimal UI with dark theme
+  - Dashboard with real-time stats
+  - Draft Studio for creating posts
+  - Settings panel
+  - Logs viewer
+  - Safe Mode toggle in sidebar
+- **Native Builds**
+  - macOS .dmg installer (Apple Silicon + Intel)
+  - Windows .exe installer
+  - Auto-update support (coming soon)
+- **UI Features**
+  - Real-time rate limit display
+  - Security status monitoring
+  - Draft preview before publishing
+  - Copy as Markdown
+  - Confirmation dialogs for publishing
+
+### Changed
+- Improved README with desktop app download links
+- Updated documentation for desktop usage
+
 ## [1.0.0] - 2026-01-31
 
 ### Added
