@@ -7,15 +7,23 @@ import { RateLimiter } from './utils/rateLimiter.js';
 import { MoltbookClient } from './moltbook/client.js';
 import { fetchSkillDoc } from './moltbook/skillDoc.js';
 import { buildPost, buildComment, helpfulThreads } from './content/templates.js';
+import { Scheduler } from './features/scheduler.js';
+import { Analytics } from './features/analytics.js';
+import { TemplateEngine } from './features/templates.js';
+import { MultiAccountManager } from './features/multiAccount.js';
 
 const program = new Command();
 const rateLimiter = new RateLimiter(config.rateLimit);
 const client = new MoltbookClient();
+const scheduler = new Scheduler(client);
+const analytics = new Analytics();
+const templateEngine = new TemplateEngine();
+const accountManager = new MultiAccountManager();
 
 program
   .name('watamai')
   .description('WATAM AI - Moltbook agent CLI')
-  .version('1.0.0');
+  .version('1.2.0');
 
 // Fetch skill.md
 program
@@ -328,6 +336,226 @@ program
     
     console.log('\n================================\n');
     console.log('✅ Security tests completed');
+  });
+
+// Schedule commands
+program
+  .command('schedule-post')
+  .description('Schedule a post for later')
+  .requiredOption('-m, --submolt <name>', 'Submolt to post in')
+  .requiredOption('-t, --title <text>', 'Post title')
+  .requiredOption('-b, --body <text>', 'Post body')
+  .requiredOption('-w, --when <datetime>', 'When to publish (ISO 8601 format)')
+  .action(async (options) => {
+    try {
+      const scheduledFor = new Date(options.when);
+      if (isNaN(scheduledFor.getTime())) {
+        console.log('❌ Invalid date format. Use ISO 8601 (e.g., 2026-02-01T14:30:00)');
+        return;
+      }
+
+      const post = buildPost(options.submolt, options.title, options.body);
+      const taskId = scheduler.schedulePost(post, scheduledFor);
+
+      console.log(`\n✅ Post scheduled!`);
+      console.log(`Task ID: ${taskId}`);
+      console.log(`Will publish at: ${scheduledFor.toLocaleString()}\n`);
+    } catch (error) {
+      logger.error({ error }, 'Failed to schedule post');
+      process.exit(1);
+    }
+  });
+
+program
+  .command('scheduled-tasks')
+  .description('List all scheduled tasks')
+  .action(() => {
+    const tasks = scheduler.getAllTasks();
+    console.log(`\n=== Scheduled Tasks (${tasks.length}) ===\n`);
+
+    if (tasks.length === 0) {
+      console.log('No scheduled tasks');
+    } else {
+      tasks.forEach((task) => {
+        console.log(`${task.id}`);
+        console.log(`  Type: ${task.type}`);
+        console.log(`  Status: ${task.status}`);
+        console.log(`  Scheduled: ${task.scheduledFor.toLocaleString()}`);
+        if (task.executedAt) {
+          console.log(`  Executed: ${task.executedAt.toLocaleString()}`);
+        }
+        console.log();
+      });
+    }
+  });
+
+program
+  .command('cancel-task')
+  .description('Cancel a scheduled task')
+  .requiredOption('-i, --id <taskId>', 'Task ID to cancel')
+  .action((options) => {
+    const cancelled = scheduler.cancelTask(options.id);
+    if (cancelled) {
+      console.log(`✅ Task ${options.id} cancelled`);
+    } else {
+      console.log(`❌ Task not found or already completed`);
+    }
+  });
+
+// Analytics commands
+program
+  .command('analytics')
+  .description('Show analytics and metrics')
+  .action(() => {
+    const metrics = analytics.getMetrics();
+    console.log('\n=== Analytics ===\n');
+    console.log(`Total Posts: ${metrics.totalPosts}`);
+    console.log(`Total Comments: ${metrics.totalComments}`);
+    console.log(`Total Votes: ${metrics.totalVotes}`);
+    console.log(`Success Rate: ${metrics.successRate.toFixed(1)}%`);
+    console.log(`Avg Response Time: ${metrics.averageResponseTime.toFixed(0)}ms`);
+    console.log(`Rate Limit Hits: ${metrics.rateLimitHits}`);
+    console.log(`Errors: ${metrics.errorCount}`);
+    if (metrics.lastActivity) {
+      console.log(`Last Activity: ${metrics.lastActivity.toLocaleString()}`);
+    }
+
+    if (metrics.topSubmolts.length > 0) {
+      console.log('\nTop Submolts:');
+      metrics.topSubmolts.slice(0, 5).forEach((s, i) => {
+        console.log(`  ${i + 1}. ${s.name}: ${s.count} activities`);
+      });
+    }
+
+    console.log('\n=================\n');
+  });
+
+program
+  .command('export-analytics')
+  .description('Export analytics logs to JSON')
+  .action(() => {
+    const data = analytics.exportLogs();
+    console.log(data);
+  });
+
+// Template commands
+program
+  .command('list-templates')
+  .description('List all content templates')
+  .option('-c, --category <type>', 'Filter by category')
+  .option('-l, --language <lang>', 'Filter by language (en/tr)')
+  .action((options) => {
+    let templates = templateEngine.getAllTemplates();
+
+    if (options.category) {
+      templates = templateEngine.getTemplatesByCategory(options.category);
+    }
+    if (options.language) {
+      templates = templateEngine.getTemplatesByLanguage(options.language);
+    }
+
+    console.log(`\n=== Templates (${templates.length}) ===\n`);
+    templates.forEach((t) => {
+      console.log(`${t.id} [${t.language}]`);
+      console.log(`  Name: ${t.name}`);
+      console.log(`  Category: ${t.category}`);
+      if (t.variables) {
+        console.log(`  Variables: ${t.variables.join(', ')}`);
+      }
+      console.log();
+    });
+  });
+
+program
+  .command('use-template')
+  .description('Generate content from template')
+  .requiredOption('-i, --id <templateId>', 'Template ID')
+  .option('-v, --vars <json>', 'Variables as JSON object')
+  .action((options) => {
+    try {
+      const variables = options.vars ? JSON.parse(options.vars) : {};
+      const result = templateEngine.renderTemplate(options.id, variables);
+
+      if (!result) {
+        console.log('❌ Template not found');
+        return;
+      }
+
+      console.log('\n=== Generated Content ===\n');
+      if (result.title) {
+        console.log(`Title: ${result.title}\n`);
+      }
+      console.log(result.body);
+      console.log('\n=========================\n');
+    } catch (error) {
+      console.log('❌ Invalid variables JSON');
+    }
+  });
+
+// Multi-account commands
+program
+  .command('add-account')
+  .description('Add a new Moltbook account')
+  .requiredOption('-n, --name <name>', 'Account name')
+  .requiredOption('-u, --url <url>', 'Moltbook base URL')
+  .requiredOption('-t, --token <token>', 'Auth token')
+  .action((options) => {
+    const id = accountManager.addAccount({
+      name: options.name,
+      baseUrl: options.url,
+      authToken: options.token,
+    });
+    console.log(`✅ Account added: ${id}`);
+  });
+
+program
+  .command('list-accounts')
+  .description('List all accounts')
+  .action(() => {
+    const accounts = accountManager.getAllAccounts();
+    console.log(`\n=== Accounts (${accounts.length}) ===\n`);
+
+    if (accounts.length === 0) {
+      console.log('No accounts configured');
+    } else {
+      accounts.forEach((acc) => {
+        const active = acc.isActive ? '✓' : ' ';
+        console.log(`[${active}] ${acc.name}`);
+        console.log(`    ID: ${acc.id}`);
+        console.log(`    URL: ${acc.baseUrl}`);
+        if (acc.lastUsed) {
+          console.log(`    Last used: ${acc.lastUsed.toLocaleString()}`);
+        }
+        console.log();
+      });
+    }
+  });
+
+program
+  .command('switch-account')
+  .description('Switch active account')
+  .requiredOption('-i, --id <accountId>', 'Account ID')
+  .action((options) => {
+    const success = accountManager.setActiveAccount(options.id);
+    if (success) {
+      const account = accountManager.getAccount(options.id);
+      console.log(`✅ Switched to: ${account?.name}`);
+    } else {
+      console.log('❌ Account not found');
+    }
+  });
+
+program
+  .command('remove-account')
+  .description('Remove an account')
+  .requiredOption('-i, --id <accountId>', 'Account ID')
+  .action((options) => {
+    const removed = accountManager.removeAccount(options.id);
+    if (removed) {
+      console.log(`✅ Account removed`);
+    } else {
+      console.log('❌ Account not found');
+    }
   });
 
 program.parse();

@@ -1,0 +1,29 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" rx="128" fill="#1a1a2e"/>
+  
+  <!-- Gradient -->
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- W Letter -->
+  <path d="M 120 160 L 160 340 L 200 240 L 240 340 L 280 160" 
+        stroke="url(#grad)" 
+        stroke-width="32" 
+        fill="none" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+  
+  <!-- AI Symbol -->
+  <circle cx="360" cy="200" r="40" fill="url(#grad)"/>
+  <circle cx="360" cy="300" r="40" fill="url(#grad)"/>
+  <line x1="360" y1="240" x2="360" y2="260" stroke="url(#grad)" stroke-width="16"/>
+  
+  <!-- Accent dots -->
+  <circle cx="140" cy="380" r="8" fill="#6366f1" opacity="0.6"/>
+  <circle cx="380" cy="380" r="8" fill="#8b5cf6" opacity="0.6"/>
+</svg>

@@ -1,0 +1,4 @@
+This is a placeholder. For production builds, generate proper .ico file using:
+1. Create 256x256 PNG icon
+2. Use ImageMagick or electron-icon-builder
+3. Replace this file

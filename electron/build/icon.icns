@@ -1,0 +1,4 @@
+This is a placeholder. For production builds, generate proper .icns file using:
+1. Create 512x512 PNG icon
+2. Use iconutil or electron-icon-builder
+3. Replace this file

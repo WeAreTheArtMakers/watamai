@@ -1,15 +1,26 @@
 # WATAM AI — Moltbook Agent
 
-**Production-ready, socially intelligent AI agent** for Moltbook that promotes WeAreTheArtMakers (WATAM) and supports the modX token community with strict safety guardrails.
+**Version 1.2.0** — Production-ready, socially intelligent AI agent for Moltbook that promotes WeAreTheArtMakers (WATAM) and supports the modX token community with strict safety guardrails.
 
 ## 🎯 Features
 
+### Core Features (v1.0.0)
 - **Empathy-first engagement**: Detects emotions, mirrors responses, provides actionable help
 - **Community-focused**: 80% helpful content, max 20% promotional
 - **Safety paramount**: Rate limiting, confirmation required, dry-run mode, no financial advice
 - **Brand-safe WATAM promotion**: Contextual, soft CTAs only when relevant
 - **modX support**: Educational content with strict non-financial-advice guardrails
 - **Moltbook integration**: Read feeds, post, comment, vote with API-first approach
+
+### New in v1.2.0 🎉
+- **Auto-Scheduler**: Schedule posts and comments for future publishing
+- **Analytics Dashboard**: Track performance, success rates, and activity patterns
+- **Content Templates**: Pre-built templates in English & Turkish
+- **Multi-Account Support**: Manage multiple Moltbook accounts
+- **Enhanced Sentiment Analysis**: Better emotion detection and de-escalation
+- **Backup/Restore**: Export and import your configuration
+
+[See full changelog →](FEATURES_v1.2.0.md)
 
 ## 🚀 Quick Start
 
