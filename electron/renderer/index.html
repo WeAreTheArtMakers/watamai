@@ -5,41 +5,65 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WATAM AI</title>
   <link rel="stylesheet" href="styles.css">
+  <style>
+    /* CRITICAL: Force text selection everywhere */
+    * {
+      -webkit-user-select: text !important;
+      user-select: text !important;
+    }
+    button, .btn, .nav-item, .slider, .switch, input[type="checkbox"], input[type="radio"] {
+      -webkit-user-select: none !important;
+      user-select: none !important;
+      cursor: pointer !important;
+    }
+  </style>
 </head>
-<body>
+<body style="-webkit-user-select: text !important; user-select: text !important;">
   <div class="app">
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="logo">
-        <h1>🎨 WATAM AI</h1>
-        <span class="version">v1.1.0</span>
+        <h1>WATAM AI</h1>
+        <span class="version">v1.2.0</span>
       </div>
 
       <nav class="nav">
-        <button class="nav-item active" data-page="dashboard">
+        <div class="nav-item active" data-page="dashboard">
           <span class="icon">📊</span>
           Dashboard
-        </button>
-        <button class="nav-item" data-page="persona">
+        </div>
+        <div class="nav-item" data-page="persona">
           <span class="icon">🤖</span>
           Persona
-        </button>
-        <button class="nav-item" data-page="skills">
+        </div>
+        <div class="nav-item" data-page="skills">
           <span class="icon">📚</span>
           Skills
-        </button>
-        <button class="nav-item" data-page="draft">
-          <span class="icon">✍️</span>
-          Draft Studio
-        </button>
-        <button class="nav-item" data-page="logs">
+        </div>
+        <div class="nav-item" data-page="drafts">
           <span class="icon">📝</span>
+          Drafts
+        </div>
+        <div class="nav-item" data-page="draft">
+          <span class="icon">✍️</span>
+          New Draft
+        </div>
+        <div class="nav-item" data-page="posts">
+          <span class="icon">�</span>
+          Posts
+        </div>
+        <div class="nav-item" data-page="logs">
+          <span class="icon">📋</span>
           Logs
-        </button>
-        <button class="nav-item" data-page="settings">
+        </div>
+        <div class="nav-item" data-page="ai-config">
+          <span class="icon">🤖</span>
+          AI Agent
+        </div>
+        <div class="nav-item" data-page="settings">
           <span class="icon">⚙️</span>
           Settings
-        </button>
+        </div>
       </nav>
 
       <div class="safe-mode">
@@ -106,10 +130,22 @@
         </div>
       </div>
 
+      <!-- Drafts Page -->
+      <div id="drafts" class="page">
+        <header class="page-header">
+          <h2>Saved Drafts</h2>
+          <p>Manage your draft posts</p>
+        </header>
+
+        <div id="draftsContainer" class="drafts-container">
+          <p class="empty-state">No saved drafts yet. Create one in Draft Studio!</p>
+        </div>
+      </div>
+
       <!-- Draft Studio Page -->
       <div id="draft" class="page">
         <header class="page-header">
-          <h2>Draft Studio</h2>
+          <h2>New Draft</h2>
           <p>Create and preview posts before publishing</p>
         </header>
 
@@ -120,8 +156,13 @@
           </div>
 
           <div class="form-group">
-            <label for="topic">Topic</label>
-            <input type="text" id="topic" placeholder="Enter post topic">
+            <label for="topic">Topic / Title</label>
+            <input type="text" id="topic" placeholder="Enter post title">
+          </div>
+
+          <div class="form-group">
+            <label for="draftBody">Post Content</label>
+            <textarea id="draftBody" rows="10" placeholder="Write your post content here..."></textarea>
           </div>
 
           <div class="form-group">
@@ -132,7 +173,8 @@
           </div>
 
           <div class="form-actions">
-            <button id="draftBtn" class="btn btn-primary">Generate Draft</button>
+            <button id="saveDraftBtn" class="btn btn-secondary">Save Draft</button>
+            <button id="previewDraftBtn" class="btn btn-primary">Preview</button>
           </div>
         </div>
 
@@ -146,8 +188,243 @@
             <div id="previewBody"></div>
           </div>
           <div class="preview-actions">
-            <button id="publishBtn" class="btn btn-success">Publish</button>
+            <button id="publishBtn" class="btn btn-success">Publish to Moltbook</button>
             <button id="copyBtn" class="btn btn-secondary">Copy as Markdown</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Posts Page -->
+      <div id="posts" class="page">
+        <header class="page-header">
+          <h2>Published Posts</h2>
+          <p>Track your posts and respond to comments</p>
+        </header>
+
+        <div class="posts-controls">
+          <button id="refreshPostsBtn" class="btn btn-secondary">🔄 Refresh</button>
+        </div>
+
+        <div id="postsContainer" class="posts-container">
+          <p class="empty-state">No published posts yet. Create and publish a draft!</p>
+        </div>
+      </div>
+
+      <!-- AI Agent Configuration Page -->
+      <div id="ai-config" class="page">
+        <header class="page-header">
+          <h2>🤖 AI Agent Configuration</h2>
+          <p>Configure AI model for automatic responses</p>
+        </header>
+
+        <!-- AI Provider Selection -->
+        <div class="card">
+          <h3>AI Provider</h3>
+          <p class="info-text">Select your AI provider and enter API credentials</p>
+          
+          <div class="form-group">
+            <label for="aiProvider">AI Provider</label>
+            <select id="aiProvider" class="form-control">
+              <option value="">-- Select Provider --</option>
+              <optgroup label="Local (No API Key Needed)">
+                <option value="ollama">🏠 Ollama (LOCAL - Your Mac)</option>
+              </optgroup>
+              <optgroup label="Free Cloud Providers">
+                <option value="groq">⚡ Groq (FREE - Fastest)</option>
+                <option value="together">🤝 Together AI (FREE)</option>
+                <option value="huggingface">🤗 HuggingFace (FREE)</option>
+              </optgroup>
+              <optgroup label="Premium Providers">
+                <option value="openai">🚀 OpenAI (GPT-5.1, GPT-5)</option>
+                <option value="anthropic">🧠 Anthropic (Claude 4.5)</option>
+                <option value="google">🔮 Google (Gemini 3)</option>
+              </optgroup>
+              <optgroup label="Other">
+                <option value="custom">⚙️ Custom API</option>
+              </optgroup>
+            </select>
+            <small>💡 <strong>Ollama</strong> runs locally (no API key, unlimited), <strong>Groq</strong> is fastest cloud option</small>
+          </div>
+
+          <div class="form-group">
+            <label for="aiApiKey">API Key</label>
+            <input type="password" id="aiApiKey" placeholder="Enter your API key" class="form-control">
+            <small>Your API key is stored securely and never shared</small>
+          </div>
+
+          <div class="form-group" id="aiModelGroup" style="display: none;">
+            <label for="aiModel">Model</label>
+            <select id="aiModel" class="form-control">
+              <option value="">-- Select Model --</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="customEndpointGroup" style="display: none;">
+            <label for="customEndpoint">Custom API Endpoint</label>
+            <input type="text" id="customEndpoint" placeholder="https://api.example.com/v1/chat" class="form-control">
+          </div>
+
+          <div class="form-actions">
+            <button id="testAiBtn" class="btn btn-secondary">Test Connection</button>
+            <button id="saveAiConfigBtn" class="btn btn-primary">Save Configuration</button>
+          </div>
+
+          <div id="aiConfigStatus" class="status-message hidden"></div>
+        </div>
+
+        <!-- Auto-Reply Settings -->
+        <div class="card">
+          <h3>⚡ Auto-Reply Settings</h3>
+          <p class="info-text">Configure automatic response behavior</p>
+          
+          <div class="form-group">
+            <label class="switch-label">
+              <input type="checkbox" id="autoReplyEnabled">
+              <span class="switch-text">Enable Auto-Reply</span>
+            </label>
+            <small>Agent will automatically respond to posts and comments</small>
+          </div>
+
+          <div class="form-group">
+            <label for="checkInterval">Check Interval (minutes)</label>
+            <input type="number" id="checkInterval" value="5" min="1" max="60" class="form-control">
+            <small>How often to check for new posts (minimum 1 minute)</small>
+          </div>
+
+          <div class="form-group">
+            <label for="replySubmolts">Monitor Submolts</label>
+            <input type="text" id="replySubmolts" placeholder="art, music, ai" class="form-control">
+            <small>Comma-separated list of submolts to monitor (leave empty for all)</small>
+          </div>
+
+          <div class="form-group">
+            <label for="replyKeywords">Reply Keywords</label>
+            <input type="text" id="replyKeywords" placeholder="WATAM, modX, art" class="form-control">
+            <small>Only reply to posts containing these keywords (leave empty for all)</small>
+          </div>
+
+          <div class="form-group">
+            <label for="maxRepliesPerHour">Max Replies per Hour</label>
+            <input type="number" id="maxRepliesPerHour" value="10" min="1" max="20" class="form-control">
+            <small>Moltbook limit is 20 comments/hour</small>
+          </div>
+
+          <div class="form-actions">
+            <button id="saveAutoReplyBtn" class="btn btn-primary">Save Auto-Reply Settings</button>
+          </div>
+        </div>
+
+        <!-- Advanced AI Settings -->
+        <div class="card">
+          <h3>🎯 Advanced AI Settings</h3>
+          <p class="info-text">Fine-tune AI response quality and behavior</p>
+          
+          <div class="form-group">
+            <label for="responseLength">Response Length</label>
+            <select id="responseLength" class="form-control">
+              <option value="short">Short (50-100 words) - Quick responses</option>
+              <option value="medium" selected>Medium (100-200 words) - Balanced</option>
+              <option value="long">Long (200-300 words) - Detailed</option>
+            </select>
+            <small>Control how verbose the AI responses should be</small>
+          </div>
+
+          <div class="form-group">
+            <label for="responseStyle">Response Style</label>
+            <select id="responseStyle" class="form-control">
+              <option value="professional">Professional - Formal and polished</option>
+              <option value="friendly" selected>Friendly - Warm and approachable</option>
+              <option value="casual">Casual - Relaxed and conversational</option>
+              <option value="technical">Technical - Detailed and precise</option>
+            </select>
+            <small>Set the tone and style of AI responses</small>
+          </div>
+
+          <div class="form-group">
+            <label for="temperature">Creativity Level (Temperature)</label>
+            <input type="range" id="temperature" min="0" max="20" value="7" class="form-control">
+            <div class="range-labels">
+              <span>Focused (0.0)</span>
+              <span id="temperatureValue">0.7</span>
+              <span>Creative (2.0)</span>
+            </div>
+            <small>Lower = more focused and consistent, Higher = more creative and varied</small>
+          </div>
+
+          <div class="form-group">
+            <label class="switch-label">
+              <input type="checkbox" id="usePersona" checked>
+              <span class="switch-text">Use Persona & Skills</span>
+            </label>
+            <small>Include your persona and skills in AI context (recommended)</small>
+          </div>
+
+          <div class="form-group">
+            <label class="switch-label">
+              <input type="checkbox" id="avoidRepetition" checked>
+              <span class="switch-text">Avoid Repetitive Responses</span>
+            </label>
+            <small>AI will try to vary responses to similar posts</small>
+          </div>
+
+          <div class="form-actions">
+            <button id="saveAdvancedBtn" class="btn btn-primary">Save Advanced Settings</button>
+          </div>
+        </div>
+
+        <!-- Agent Status -->
+        <div class="card">
+          <h3>📊 Agent Status</h3>
+          
+          <div class="agent-status-grid">
+            <div class="status-item">
+              <span class="status-label">Auto-Reply:</span>
+              <span id="autoReplyStatus" class="status-value">Disabled</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">AI Provider:</span>
+              <span id="aiProviderStatus" class="status-value">Not configured</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">Last Check:</span>
+              <span id="lastCheckStatus" class="status-value">Never</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">Replies Today:</span>
+              <span id="repliesTodayStatus" class="status-value">0</span>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button id="startAgentBtn" class="btn btn-success">Start Agent</button>
+            <button id="stopAgentBtn" class="btn btn-danger" disabled>Stop Agent</button>
+            <button id="testReplyBtn" class="btn btn-secondary">Test Reply</button>
+          </div>
+        </div>
+
+        <!-- Manual Reply to URL -->
+        <div class="card">
+          <h3>🎯 Send AI Reply to Specific Post</h3>
+          <p class="card-description">Enter a Moltbook post URL to send an AI-generated reply</p>
+          
+          <div class="form-group">
+            <label for="manualReplyUrl">Post URL</label>
+            <input type="text" id="manualReplyUrl" placeholder="https://www.moltbook.com/post/..." />
+            <small>Example: https://www.moltbook.com/post/7402dca5-2567-4cee-800b-6439d10b19d4</small>
+          </div>
+          
+          <div class="form-actions">
+            <button id="sendManualReplyBtn" class="btn btn-primary">Generate & Send Reply</button>
+          </div>
+          
+          <div id="manualReplyStatus" class="status-message hidden"></div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="card">
+          <h3>📝 Recent Agent Activity</h3>
+          <div id="agentActivityLog" class="activity-log">
+            <p class="empty-state">No activity yet</p>
           </div>
         </div>
       </div>
@@ -156,24 +433,165 @@
       <div id="settings" class="page">
         <header class="page-header">
           <h2>Settings</h2>
-          <p>Configure your agent</p>
+          <p>Configure your agent and Moltbook connection</p>
         </header>
 
-        <div class="settings-form">
+        <!-- Moltbook Agent Registration -->
+        <div class="card">
+          <h3>🔗 Moltbook Agent</h3>
+          
+          <div id="agentNotRegistered" class="agent-section">
+            <p class="info-text">Register your agent with Moltbook to start posting and commenting.</p>
+            
+            <div class="form-group">
+              <label for="agentName">Agent Name</label>
+              <input type="text" id="agentName" placeholder="watam-agent" value="watam-agent">
+              <small>Choose a unique name for your agent</small>
+            </div>
+
+            <div class="form-group">
+              <label for="agentDescription">Description</label>
+              <textarea id="agentDescription" rows="3" placeholder="A helpful AI agent for the WATAM community">A helpful AI agent for the WATAM community</textarea>
+            </div>
+
+            <div class="form-actions">
+              <button id="registerAgentBtn" class="btn btn-primary">Register Agent</button>
+            </div>
+          </div>
+
+          <div id="agentRegistered" class="agent-section hidden">
+            <div class="agent-status">
+              <div class="status-badge" id="agentStatusBadge">
+                <span class="dot"></span>
+                <span id="agentStatusText">Checking...</span>
+              </div>
+              <button id="checkStatusBtn" class="btn btn-secondary btn-sm" onclick="if(window.settingsModule && window.settingsModule.checkStatus) window.settingsModule.checkStatus(); else console.error('settingsModule.checkStatus not available');">Check Status</button>
+            </div>
+
+            <div class="agent-info">
+              <div class="info-row">
+                <span class="label">Agent Name:</span>
+                <span id="agentNameDisplay" class="value"></span>
+              </div>
+              <div class="info-row">
+                <span class="label">API Key:</span>
+                <span id="agentApiKeyMasked" class="value monospace"></span>
+              </div>
+              <div class="info-row">
+                <span class="label">Registered:</span>
+                <span id="agentCreatedAt" class="value"></span>
+              </div>
+            </div>
+
+            <div id="claimSection" class="claim-section hidden">
+              <div class="alert alert-warning">
+                <strong>⚠️ Action Required:</strong> Complete the claim process to activate your agent.
+              </div>
+
+              <div class="claim-info">
+                <div class="form-group">
+                  <label>Claim URL</label>
+                  <div class="input-with-button">
+                    <input type="text" id="claimUrl" readonly>
+                    <button id="openClaimBtn" class="btn btn-secondary btn-sm">Open</button>
+                    <button id="copyClaimBtn" class="btn btn-secondary btn-sm">Copy</button>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label>Verification Code</label>
+                  <div class="input-with-button">
+                    <input type="text" id="verificationCode" readonly>
+                    <button id="copyCodeBtn" class="btn btn-secondary btn-sm">Copy</button>
+                  </div>
+                </div>
+
+                <div class="claim-instructions">
+                  <p><strong>Steps to complete claim:</strong></p>
+                  <ol>
+                    <li>Click "Open" to visit the claim URL in your browser</li>
+                    <li>Log in to your Moltbook account</li>
+                    <li>Enter the verification code</li>
+                    <li>Complete any required steps (e.g., tweet verification)</li>
+                    <li>Return here and click "I completed claim"</li>
+                  </ol>
+                </div>
+
+                <div class="form-actions">
+                  <button id="completedClaimBtn" class="btn btn-success" onclick="if(window.settingsModule && window.settingsModule.checkStatus) window.settingsModule.checkStatus(); else console.error('settingsModule.checkStatus not available');">I completed claim — Check status</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="agentActiveSection" class="active-section hidden">
+              <div class="alert alert-success">
+                <strong>✅ Agent Active:</strong> Your agent is connected and ready to use!
+              </div>
+
+              <div class="form-actions">
+                <button id="fetchSkillDocBtn" class="btn btn-secondary" onclick="if(window.settingsModule && window.settingsModule.fetchSkillDoc) window.settingsModule.fetchSkillDoc(); else console.error('settingsModule.fetchSkillDoc not available');">Re-fetch skill.md</button>
+                <button id="resetAgentBtn" class="btn btn-danger">Reset Agent</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="agentError" class="alert alert-danger hidden"></div>
+        </div>
+
+        <!-- Safe Mode Settings -->
+        <div class="card">
+          <h3>🔒 Safe Mode</h3>
+          <p class="info-text">When enabled, publishing is disabled. Only drafts can be created.</p>
+          
           <div class="form-group">
-            <label for="agentName">Agent Name</label>
-            <input type="text" id="agentName" placeholder="watam-agent">
+            <label class="switch-label">
+              <input type="checkbox" id="safeModeCheckbox" checked>
+              <span class="switch-text">Safe Mode Enabled</span>
+            </label>
+          </div>
+
+          <div id="safeModeWarning" class="alert alert-info">
+            <strong>ℹ️ Safe Mode is ON:</strong> Publishing to Moltbook is disabled. Disable Safe Mode to publish posts and comments.
+          </div>
+        </div>
+
+        <!-- Rate Limits -->
+        <div class="card">
+          <h3>⏱️ Rate Limits</h3>
+          <p class="info-text">Configure posting and commenting rate limits.</p>
+          
+          <div class="form-group">
+            <label for="maxPostsPerHour">Max Posts per Hour</label>
+            <input type="number" id="maxPostsPerHour" value="3" min="1" max="10">
           </div>
 
           <div class="form-group">
-            <label for="moltbookToken">Moltbook Auth Token</label>
-            <input type="password" id="moltbookToken" placeholder="Enter your token">
-            <small>Get your token from <a href="https://moltbook.com/skill.md" target="_blank">moltbook.com/skill.md</a></small>
+            <label for="maxCommentsPerHour">Max Comments per Hour</label>
+            <input type="number" id="maxCommentsPerHour" value="20" min="1" max="50">
           </div>
 
           <div class="form-actions">
-            <button id="saveSettingsBtn" class="btn btn-primary">Save Settings</button>
+            <button id="saveRateLimitsBtn" class="btn btn-primary">Save Rate Limits</button>
           </div>
+        </div>
+
+        <!-- App Updates -->
+        <div class="card">
+          <h3>🔄 App Updates</h3>
+          <p class="info-text">Check for new versions of WATAM AI.</p>
+          
+          <div class="form-group">
+            <div class="info-row">
+              <span class="label">Current Version:</span>
+              <span class="value">v1.2.0</span>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button id="checkUpdatesBtn" class="btn btn-primary">Check for Updates</button>
+          </div>
+
+          <div id="updateStatus" class="status-message hidden"></div>
         </div>
       </div>
 
@@ -183,6 +601,11 @@
           <h2>Logs</h2>
           <p>View agent activity and errors</p>
         </header>
+
+        <div class="logs-controls">
+          <button id="refreshLogsBtn" class="btn btn-secondary" onclick="loadLogs()">🔄 Refresh</button>
+          <button id="clearLogsBtn" class="btn btn-danger" onclick="if(confirm('Clear all logs?')) window.electronAPI.clearLogs().then(() => loadLogs())">🗑️ Clear Logs</button>
+        </div>
 
         <div class="logs-container">
           <div id="logsContent" class="logs-content">
@@ -195,13 +618,32 @@
       <div id="persona" class="page">
         <header class="page-header">
           <h2>Persona Editor</h2>
-          <p>Customize your agent's personality</p>
+          <p>Define your agent's personality and behavior</p>
         </header>
 
         <div class="card">
-          <p class="info-message">
-            📝 Persona editing coming in next update. For now, edit <code>.kiro/prompts/modx-moltbook-agent.md</code> directly.
-          </p>
+          <div class="form-group">
+            <label for="personaText">Agent Persona</label>
+            <textarea 
+              id="personaText" 
+              rows="15" 
+              placeholder="Enter your agent's personality, tone, and behavior guidelines...
+
+Example:
+You are a helpful, friendly AI agent for the WATAM community.
+- Be warm and welcoming
+- Focus on art, music, and creativity
+- Always include 'Not financial advice' for token discussions
+- Use emojis sparingly
+- Keep responses concise and actionable"></textarea>
+          </div>
+
+          <div class="form-actions">
+            <button id="savePersonaBtn" class="btn btn-primary">Save Persona</button>
+            <button id="loadPersonaBtn" class="btn btn-secondary">Load Current</button>
+          </div>
+
+          <div id="personaStatus" class="status-message hidden"></div>
         </div>
       </div>
 
@@ -209,18 +651,66 @@
       <div id="skills" class="page">
         <header class="page-header">
           <h2>Skills Editor</h2>
-          <p>Manage agent skills and knowledge</p>
+          <p>Define what your agent knows and can do</p>
         </header>
 
         <div class="card">
-          <p class="info-message">
-            📚 Skills editing coming in next update. For now, edit files in <code>.kiro/skills/</code> directly.
-          </p>
+          <div class="form-group">
+            <label for="skillsText">Agent Skills & Knowledge</label>
+            <textarea 
+              id="skillsText" 
+              rows="15" 
+              placeholder="Enter your agent's skills, knowledge, and capabilities...
+
+Example:
+# WATAM Community Skills
+
+## About WATAM
+- WeAreTheArtMakers is a creative community
+- Website: wearetheartmakers.com
+- Focus: Art, Music, AI, Community
+
+## modX Token
+- Community governance token
+- NOT financial advice
+- Educational purposes only
+
+## Moltbook Platform
+- Social platform for communities
+- Submolts are like subreddits
+- Respect rate limits"></textarea>
+          </div>
+
+          <div class="form-actions">
+            <button id="saveSkillsBtn" class="btn btn-primary">Save Skills</button>
+            <button id="loadSkillsBtn" class="btn btn-secondary">Load Current</button>
+          </div>
+
+          <div id="skillsStatus" class="status-message hidden"></div>
         </div>
       </div>
     </main>
   </div>
 
+  <!-- Reply Dialog -->
+  <div id="replyDialog" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="replyDialogTitle">Reply</h3>
+        <button class="modal-close" onclick="window.closeReplyDialog()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <textarea id="replyDialogText" placeholder="Enter your reply..." rows="6"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="window.closeReplyDialog()">Cancel</button>
+        <button class="btn btn-primary" onclick="window.submitReplyDialog()">Send Reply</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="settings.js"></script>
+  <script src="ai-config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -5,6 +5,61 @@ All notable changes to WATAM AI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-02-01
+
+### Added
+- **Auto-Update System**
+  - Automatic update checking on app startup
+  - Manual "Check for Updates" button in Settings
+  - Download progress tracking with percentage
+  - Install on quit with option to restart immediately
+  - GitHub releases integration
+- **Comments System**
+  - View comments on published posts
+  - Reply to posts and comments
+  - Comment rendering with proper author/body parsing
+  - Loading states for slow API responses
+  - Error handling with user-friendly messages
+- **Enhanced Logging**
+  - Detailed console logs for debugging
+  - Post loading and rendering logs
+  - Comment fetching and display logs
+  - Button click and event tracking
+
+### Fixed
+- **Navigation Issues**
+  - Fixed tab and menu navigation not working
+  - Fixed HTML template string syntax errors
+  - Improved event listener attachment
+- **Comments Display**
+  - Fixed comments not showing when clicking "View Comments"
+  - Added proper error messages for failed comment loads
+  - Added loading spinner for comment fetching
+  - Fixed comment author and body parsing for different API formats
+- **Safe Mode Toggle**
+  - Fixed multiple notifications on toggle (5-7 reduced to 1)
+  - Added global flag to prevent duplicate events
+  - Synchronized sidebar and settings page toggles
+- **Copy/Paste**
+  - Fixed keyboard shortcuts (Cmd+C/V/X/A)
+  - Added Edit menu with standard commands
+  - Enabled context menu for text selection
+
+### Changed
+- Improved error handling throughout the app
+- Better loading states with spinner animations
+- Enhanced user notifications with emojis
+- Updated Settings page with App Updates section
+- Improved comment display with @ mentions
+
+### Technical
+- Added `electron-updater` dependency
+- Configured GitHub releases for auto-update
+- Added IPC handlers for update checking
+- Enhanced preload.js with update bridge
+- Improved app.js with better logging
+- Updated package.json with publish configuration
+
 ## [1.1.0] - 2026-01-31
 
 ### Added

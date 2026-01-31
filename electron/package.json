@@ -16,6 +16,11 @@
     "appId": "com.wearetheartmakers.watamai",
     "productName": "WATAM AI",
     "copyright": "Copyright © 2026 WeAreTheArtMakers",
+    "publish": {
+      "provider": "github",
+      "owner": "bgulesen",
+      "repo": "watamAI"
+    },
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -34,11 +39,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "hardenedRuntime": true,
@@ -51,11 +62,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -81,7 +96,7 @@
     }
   },
   "dependencies": {
-    "electron-store": "^10.0.0"
+    "electron-updater": "^6.7.3"
   },
   "devDependencies": {
     "electron": "^28.2.0",

@@ -1,370 +1,284 @@
-# WATAM AI — Moltbook Agent
+# WATAM AI - Desktop Application v1.2.0
 
-**Version 1.2.0** — Production-ready, socially intelligent AI agent for Moltbook that promotes WeAreTheArtMakers (WATAM) and supports the modX token community with strict safety guardrails.
+<div align="center">
 
-## 🎯 Features
+![WATAM AI Logo](electron/build/icon.png)
 
-### Core Features (v1.0.0)
-- **Empathy-first engagement**: Detects emotions, mirrors responses, provides actionable help
-- **Community-focused**: 80% helpful content, max 20% promotional
-- **Safety paramount**: Rate limiting, confirmation required, dry-run mode, no financial advice
-- **Brand-safe WATAM promotion**: Contextual, soft CTAs only when relevant
-- **modX support**: Educational content with strict non-financial-advice guardrails
-- **Moltbook integration**: Read feeds, post, comment, vote with API-first approach
+**Socially Intelligent AI Agent for Moltbook**
 
-### New in v1.2.0 🎉
-- **Auto-Scheduler**: Schedule posts and comments for future publishing
-- **Analytics Dashboard**: Track performance, success rates, and activity patterns
-- **Content Templates**: Pre-built templates in English & Turkish
-- **Multi-Account Support**: Manage multiple Moltbook accounts
-- **Enhanced Sentiment Analysis**: Better emotion detection and de-escalation
-- **Backup/Restore**: Export and import your configuration
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/WeAreTheArtMakers/watamai/releases)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](#download)
 
-[See full changelog →](FEATURES_v1.2.0.md)
+[Download](#download) • [Features](#features) • [Quick Start](#quick-start) • [Documentation](#documentation)
+
+</div>
+
+---
+
+## 🎯 Overview
+
+WATAM AI is a powerful desktop application that brings AI-powered automation to Moltbook, the social network for AI agents. Create, schedule, and manage your Moltbook presence with advanced AI capabilities.
+
+### Key Highlights
+
+- 🤖 **8 AI Providers** - OpenAI, Anthropic, Google, Groq (FREE), Together AI (FREE), HuggingFace (FREE), Ollama (LOCAL), Custom
+- 🔄 **Auto-Reply Agent** - Automatically respond to posts and comments
+- 📝 **Draft Studio** - Create and preview posts before publishing
+- 📊 **Analytics** - Track views, comments, and engagement
+- 🎨 **Persona Editor** - Customize your AI's personality
+- 🔒 **Safe Mode** - Test without publishing
+- 🌐 **Multi-Account** - Manage multiple Moltbook agents
+
+---
+
+## 📥 Download
+
+### Latest Release: v1.2.0
+
+| Platform | Download | Size |
+|----------|----------|------|
+| **macOS (Apple Silicon)** | [WATAM-AI-1.2.0-arm64.dmg](https://github.com/WeAreTheArtMakers/watamai/releases/download/v1.2.0/WATAM-AI-1.2.0-arm64.dmg) | 89 MB |
+| **macOS (Intel)** | [WATAM-AI-1.2.0.dmg](https://github.com/WeAreTheArtMakers/watamai/releases/download/v1.2.0/WATAM-AI-1.2.0.dmg) | 94 MB |
+| **Windows (Installer)** | [WATAM-AI-Setup-1.2.0.exe](https://github.com/WeAreTheArtMakers/watamai/releases/download/v1.2.0/WATAM-AI-Setup-1.2.0.exe) | 73 MB |
+| **Windows (Portable)** | [WATAM-AI-1.2.0.exe](https://github.com/WeAreTheArtMakers/watamai/releases/download/v1.2.0/WATAM-AI-1.2.0.exe) | 73 MB |
+
+---
+
+## ✨ Features
+
+### 🤖 AI Agent
+
+- **Multiple AI Providers**: Choose from 8 different AI providers
+- **Auto-Reply**: Automatically respond to posts matching your criteria
+- **Smart Filtering**: Filter by submolts and keywords
+- **Rate Limiting**: Configurable max replies per hour
+- **Advanced Settings**: Control response length, style, and temperature
+
+### 📝 Content Management
+
+- **Draft Studio**: Create and preview posts before publishing
+- **Auto-Save**: Never lose your work with automatic draft saving
+- **WATAM CTA**: Optionally include WeAreTheArtMakers.com link
+- **Post Tracking**: View all your published posts with stats
+
+### 🔒 Security & Safety
+
+- **Safe Mode**: Test features without actually posting
+- **Confirmation Dialogs**: Confirm before publishing
+- **Audit Logging**: Track all actions for accountability
+- **API Key Obfuscation**: Secure storage of sensitive data
+
+### 📊 Analytics
+
+- **View Counts**: Track post views
+- **Comment Tracking**: Monitor engagement
+- **Activity Log**: See all agent actions
+- **Rate Limit Monitoring**: Stay within Moltbook limits
+
+---
 
 ## 🚀 Quick Start
 
-### Desktop App (Recommended)
+### 1. Install
 
-**Download for your platform:**
-- 🍎 [macOS (Apple Silicon)](https://github.com/WeAreTheArtMakers/watamai/releases/latest/download/WATAM-AI-arm64.dmg)
-- 🍎 [macOS (Intel)](https://github.com/WeAreTheArtMakers/watamai/releases/latest/download/WATAM-AI-x64.dmg)
-- 🪟 [Windows](https://github.com/WeAreTheArtMakers/watamai/releases/latest/download/WATAM-AI-Setup.exe)
+Download the appropriate version for your platform and install.
 
-**Install and run:**
-1. Download and install
-2. Open WATAM AI
-3. Go to Settings → Add Moltbook token
-4. Start creating!
+**macOS**: Open the DMG and drag WATAM AI to Applications  
+**Windows**: Run the installer or use the portable version
 
-### CLI (Advanced)
+### 2. Register Agent
+
+1. Open **Settings** tab
+2. Click **Register New Agent**
+3. Enter agent name and description
+4. Copy the **Claim URL** and **Verification Code**
+5. Visit the claim URL in your browser
+6. Enter the verification code
+7. Click **Check Status** to verify activation
+
+### 3. Configure AI
+
+1. Open **AI Agent** tab
+2. Select an AI provider (Groq recommended for free tier)
+3. Enter your API key
+4. Click **Test Reply** to verify connection
+5. Configure auto-reply settings
+6. Click **Start Agent**
+
+### 4. Create Content
+
+1. Open **New Draft** tab
+2. Select submolt (e.g., "art", "music", "ai")
+3. Write your post title and content
+4. Click **Preview** to review
+5. Click **Publish** to post to Moltbook
+
+---
+
+## 📚 Documentation
+
+### Getting Started
+
+- [Installation Guide](INSTALLATION.md)
+- [Quick Start Guide](QUICKSTART.md)
+- [Configuration](docs/PROJECT_OVERVIEW.md)
+
+### AI Providers
+
+- [Free AI Setup](docs/development/FREE_AI_SETUP.md) - Groq, Together AI, HuggingFace
+- [Ollama Setup](docs/development/OLLAMA_SETUP.md) - Local AI models
+
+### Advanced
+
+- [Security Features](SECURITY_FEATURES.md)
+- [API Documentation](docs/EXAMPLES.md)
+- [Development Guide](CONTRIBUTING.md)
+
+---
+
+## 🐛 Known Issues & Limitations
+
+### Current Limitations
+
+1. **Moltbook API Performance**: The Moltbook API can be slow (1-2 minute response times). This is a server-side issue, not an application bug. We've added loading indicators to improve user experience.
+
+2. **Comments Endpoint**: Some Moltbook API endpoints are still in development. We're using workarounds where necessary.
+
+3. **Authentication**: You must register and claim your agent through Moltbook before using posting features.
+
+### Workarounds
+
+- **Slow API**: Loading spinners show progress. Be patient!
+- **HTTP 401 Errors**: Make sure your agent is claimed in Settings
+- **HTTP 404 Errors**: Some posts may have been deleted from Moltbook
+
+---
+
+## 🔮 Roadmap
+
+### v1.3.0 (Planned)
+
+- [ ] **Timeout Handling**: Better handling of slow API responses
+- [ ] **Retry Logic**: Automatic retry for failed requests
+- [ ] **Offline Mode**: Cache posts locally, sync when online
+- [ ] **Progress Bars**: Visual progress for long operations
+- [ ] **Batch Operations**: Delete/export multiple posts at once
+
+### v1.4.0 (Future)
+
+- [ ] **Real-time Updates**: WebSocket support for live notifications
+- [ ] **Post Editing**: Edit published posts
+- [ ] **Comment Threading**: Nested comment visualization
+- [ ] **Advanced Analytics**: Charts and graphs for engagement
+- [ ] **Scheduled Posts**: Post at specific times
+
+### v2.0.0 (Vision)
+
+- [ ] **Multi-Agent Management**: Manage multiple agents from one app
+- [ ] **Team Collaboration**: Share drafts and analytics
+- [ ] **Custom AI Training**: Train AI on your writing style
+- [ ] **Browser Extension**: Quick post from any webpage
+
+---
+
+## 🛠️ Development
 
 ### Prerequisites
 
-- Node.js ≥ 22.0.0
-- npm or pnpm
+- Node.js 18+
+- npm or yarn
+- Git
 
-### Installation
+### Setup
 
 ```bash
-# Clone the repo
+# Clone repository
 git clone https://github.com/WeAreTheArtMakers/watamai.git
 cd watamai
 
 # Install dependencies
 npm install
+cd electron && npm install
 
-# Copy environment template
-cp .env.example .env
+# Run in development
+npm run dev
 
-# Edit .env with your Moltbook auth token
-nano .env
+# Build for production
+npm run build        # macOS
+npm run build:win    # Windows
 ```
 
-### Configuration
-
-Edit `.env`:
-
-```bash
-# Get your auth token from Moltbook after joining
-MOLTBOOK_AUTH_TOKEN=your_token_here
-
-# Safety settings (recommended defaults)
-DRY_RUN_MODE=true              # Set to false to publish
-REQUIRE_CONFIRMATION=true       # Always ask before posting
-MAX_POSTS_PER_HOUR=3
-MAX_COMMENTS_PER_HOUR=20
-```
-
-### Build
-
-```bash
-npm run build
-```
-
-## 📖 Usage
-
-### Fetch Moltbook Skill Document
-
-```bash
-npm run cli fetch-skill
-```
-
-This fetches `https://moltbook.com/skill.md` and parses API endpoints, rate limits, and auth requirements.
-
-### Read Feed
-
-```bash
-# Latest posts
-npm run cli fetch-feed
-
-# Filter by submolt
-npm run cli fetch-feed --submolt art
-
-# Sort by top
-npm run cli fetch-feed --sort top --limit 20
-```
-
-### Draft Post (Dry Run)
-
-```bash
-npm run cli draft-post \
-  --submolt art \
-  --topic "Tips for digital art beginners"
-```
-
-With WATAM CTA:
-
-```bash
-npm run cli draft-post \
-  --submolt art \
-  --topic "Exploring metaverse exhibitions" \
-  --include-watam \
-  --watam-context art
-```
-
-### Publish Post (Requires Confirmation)
-
-```bash
-# 1. Set DRY_RUN_MODE=false in .env
-# 2. Run publish command
-
-npm run cli publish-post \
-  --submolt art \
-  --title "Tips for digital art beginners" \
-  --body "Here are some tips:\n- Start with fundamentals\n- Practice daily\n- Join communities"
-```
-
-You'll be prompted: `Publish this post to Moltbook? (yes/no):`
-
-### Draft Comment
-
-```bash
-npm run cli draft-comment \
-  --post-id abc123 \
-  --body "Great point! Have you tried exploring WATAM's metaverse exhibitions?" \
-  --stance helpful
-```
-
-### Publish Comment
-
-```bash
-npm run cli publish-comment \
-  --post-id abc123 \
-  --body "Great point! Have you tried exploring WATAM's metaverse exhibitions?"
-```
-
-### Check Rate Limit Stats
-
-```bash
-npm run cli stats
-```
-
-## 🔐 Safety Model
-
-### Default Behavior
-
-- **Dry-run mode**: Enabled by default (`DRY_RUN_MODE=true`)
-- **Confirmation required**: Always asks before posting/commenting
-- **Rate limiting**: 
-  - Posts: 1 per 10-20 minutes (with jitter)
-  - Comments: 1 per 1-2 minutes (with jitter)
-  - Max 3 posts/hour, 20 comments/hour
-- **Sandbox security**: Bot runs in isolated environment with restricted access
-
-### Sandbox Security
-
-Bot runs in a secure sandbox with restricted access:
-
-**✅ Allowed:**
-- Read: `src/`, `docs/`, `.kiro/`, config files
-- Write: `logs/`, `data/drafts/`, `data/cache/`
-- Execute: `npm run cli`, `npm test`, `npm run build`
-- Network: `moltbook.com`, `wearetheartmakers.com`, `modfxmarket.com`
-
-**❌ Blocked:**
-- System directories: `~/.ssh/`, `~/.aws/`, `/etc/`, `/System/`
-- Personal directories: `~/Documents/`, `~/Desktop/`, `~/Downloads/`
-- Dangerous commands: `rm -rf`, `sudo`, `curl`, `wget`, `ssh`
-- Unknown domains: All except whitelisted
-
-**Check security status:**
-```bash
-npm run cli security-status
-npm run cli security-test
-```
-
-See [docs/SECURITY.md](docs/SECURITY.md) for details.
-
-### Public Action Workflow
-
-1. **Draft**: Create content locally
-2. **Review**: Human reviews draft
-3. **Confirm**: Human explicitly confirms
-4. **Publish**: Action executes
-
-### Financial Advice Guardrails
-
-All modX-related content includes: **"This is not financial advice."**
-
-Never provides:
-- Price predictions
-- Buy/sell/hold recommendations
-- Investment advice
-- Guarantees about returns
-
-## 🎨 WATAM Promotion Guidelines
-
-### When to Mention WATAM
-
-✅ **Relevant contexts**:
-- Art platforms, creator tools
-- Metaverse exhibitions
-- Music platforms (modRecords)
-- AI tools for creators (modAI)
-- Global creator communities
-
-❌ **Avoid**:
-- Unrelated conversations
-- Forced mentions
-- Spam
-
-### CTA Format (Soft, Never Pushy)
+### Project Structure
 
 ```
-"If you're curious, explore WATAM at wearetheartmakers.com"
-"WATAM has tools for this — check it out if interested"
+watamai/
+├── electron/           # Electron app
+│   ├── main.js        # Backend (IPC handlers, API calls)
+│   ├── preload.js     # IPC bridge
+│   └── renderer/      # Frontend
+│       ├── index.html # UI
+│       ├── app.js     # Main logic
+│       ├── settings.js # Settings page
+│       ├── ai-config.js # AI configuration
+│       └── styles.css # Styling
+├── src/               # CLI tool (TypeScript)
+├── docs/              # Documentation
+└── scripts/           # Build scripts
 ```
-
-### 80/20 Rule
-
-- 80% helpful, value-first content
-- Max 20% promotional
-- Max 1 CTA per post/comment
-
-## 🔧 OpenClaw Integration
-
-See detailed setup: [docs/OPENCLAW_SETUP.md](docs/OPENCLAW_SETUP.md)
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-npm test
-
-# Watch mode
-npm run test:watch
-
-# With coverage
-npm test -- --coverage
-```
-
-## 📚 Documentation
-
-- **Reference links**: `docs/references.md`
-- **Moltbook skill**: `.kiro/skills/moltbook/SKILL.md`
-- **WATAM brand**: `.kiro/skills/watam-brand/SKILL.md`
-- **modX community**: `.kiro/skills/modx-community/SKILL.md`
-
-## 🔗 Official Links
-
-### Moltbook
-- Front page: https://www.moltbook.com/
-- Join instructions: https://moltbook.com/skill.md
-
-### Moltbot / OpenClaw
-- Moltbot repo: https://github.com/moltbot/moltbot
-- OpenClaw repo: https://github.com/openclaw/openclaw
-- Docs: https://docs.molt.bot/
-
-### WATAM
-- Homepage: https://wearetheartmakers.com/
-
-### modX
-- Landing page: https://modfxmarket.com/index.html
-
-## 🛡️ Security
-
-- Only use official repos (listed above)
-- Avoid unofficial Moltbot/OpenClaw extensions (malware risk)
-- Never share auth tokens in logs
-- Validate all external links
-- Never execute untrusted code
-
-## 🐛 Troubleshooting
-
-### "Unauthorized" Error
-
-Check your `MOLTBOOK_AUTH_TOKEN` in `.env`. Get a new token from Moltbook:
-
-1. Visit https://www.moltbook.com/
-2. Follow join instructions at https://moltbook.com/skill.md
-3. Complete tweet verification (human must do this)
-4. Copy auth token to `.env`
-
-### "Rate Limited" Error
-
-Check stats:
-
-```bash
-npm run cli stats
-```
-
-Wait for rate limit window to reset (1 hour for hourly limits).
-
-### "Cannot Fetch skill.md"
-
-The agent will use a stub version for offline development. When online, run:
-
-```bash
-npm run cli fetch-skill
-```
-
-### Posts Not Publishing
-
-1. Check `DRY_RUN_MODE=false` in `.env`
-2. Ensure `REQUIRE_CONFIRMATION=true` and respond "yes" to prompt
-3. Check rate limits with `npm run cli stats`
-
-## 🤝 Contributing
-
-This is an open-source project. Contributions welcome!
-
-1. Fork the repo
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## 📄 License
-
-This project is dual-licensed:
-
-### MIT License
-Permissive open source license for general use. See [LICENSE](LICENSE) file.
-
-### WATAM Community License
-Additional terms for community protection and commercial use. See [LICENSE.WATAM](LICENSE.WATAM) file.
-
-**Key Points:**
-- ✅ Free for personal and non-commercial use
-- ✅ Open source contributions welcome
-- ✅ Community members get priority support
-- ⚠️ Commercial use requires permission
-- 🎨 Must uphold WATAM community values
-- 💎 Contributors may receive modX rewards
-
-**For commercial licensing:** licensing@wearetheartmakers.com
-
-## 🙏 Acknowledgments
-
-- Moltbook team for the API-first social network
-- OpenClaw/Moltbot for multi-agent framework
-- WATAM community for inspiration
-- Kiro for custom agent support
 
 ---
 
-**Built with ❤️ by WeAreTheArtMakers**
+## 🤝 Contributing
 
-For questions or support, visit https://wearetheartmakers.com
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Ways to Contribute
+
+- 🐛 Report bugs
+- 💡 Suggest features
+- 📝 Improve documentation
+- 🔧 Submit pull requests
+- ⭐ Star the repository
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+Additional terms apply under the [WATAM Community License](LICENSE.WATAM).
+
+---
+
+## 🙏 Acknowledgments
+
+- **Moltbook** - The social network for AI agents
+- **WeAreTheArtMakers** - Community and support
+- **Contributors** - Everyone who helped build this
+
+---
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/WeAreTheArtMakers/watamai/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/WeAreTheArtMakers/watamai/discussions)
+- **Website**: [wearetheartmakers.com](https://wearetheartmakers.com)
+
+---
+
+## ⚠️ Disclaimer
+
+This is an independent project and is not officially affiliated with Moltbook. Use at your own risk. Always follow Moltbook's terms of service and rate limits.
+
+**Not Financial Advice**: This tool is for educational and community purposes only. Any mentions of tokens or cryptocurrencies are informational and not investment advice.
+
+---
+
+<div align="center">
+
+**Made with ❤️ by WeAreTheArtMakers**
+
+[⬆ Back to Top](#watam-ai---desktop-application-v120)
+
+</div>
