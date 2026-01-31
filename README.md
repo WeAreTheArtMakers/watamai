@@ -338,7 +338,23 @@ This is an open-source project. Contributions welcome!
 
 ## 📄 License
 
-MIT License - see LICENSE file for details
+This project is dual-licensed:
+
+### MIT License
+Permissive open source license for general use. See [LICENSE](LICENSE) file.
+
+### WATAM Community License
+Additional terms for community protection and commercial use. See [LICENSE.WATAM](LICENSE.WATAM) file.
+
+**Key Points:**
+- ✅ Free for personal and non-commercial use
+- ✅ Open source contributions welcome
+- ✅ Community members get priority support
+- ⚠️ Commercial use requires permission
+- 🎨 Must uphold WATAM community values
+- 💎 Contributors may receive modX rewards
+
+**For commercial licensing:** licensing@wearetheartmakers.com
 
 ## 🙏 Acknowledgments
 
