@@ -4,6 +4,12 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
+// Agent loop state variables (moved to top to avoid initialization errors)
+let agentInterval = null;
+let agentRepliesThisHour = 0;
+let agentHourlyResetInterval = null;
+let moltbookHeartbeatInterval = null; // 4-hour heartbeat
+
 // Simple config store using JSON file
 class SimpleStore {
   constructor() {
@@ -2843,12 +2849,6 @@ async function getOllamaModels() {
     req.end();
   });
 }
-
-// Agent loop state
-let agentInterval = null;
-let agentRepliesThisHour = 0;
-let agentHourlyResetInterval = null;
-let moltbookHeartbeatInterval = null; // 4-hour heartbeat
 
 // Start Moltbook heartbeat (4-hour cycle)
 function startMoltbookHeartbeat() {
