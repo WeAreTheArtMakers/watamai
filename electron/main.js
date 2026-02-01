@@ -9,6 +9,197 @@ let agentInterval = null;
 let agentRepliesThisHour = 0;
 let agentHourlyResetInterval = null;
 let moltbookHeartbeatInterval = null; // 4-hour heartbeat
+let queueProcessorInterval = null; // Post queue processor
+
+// Post Queue Processor
+function startQueueProcessor() {
+  if (queueProcessorInterval) {
+    console.log('[Queue] Processor already running');
+    return;
+  }
+  
+  console.log('[Queue] Starting post queue processor...');
+  
+  // Process queue every 30 seconds
+  queueProcessorInterval = setInterval(processPostQueue, 30000);
+  
+  // Process immediately
+  processPostQueue();
+}
+
+function stopQueueProcessor() {
+  if (queueProcessorInterval) {
+    clearInterval(queueProcessorInterval);
+    queueProcessorInterval = null;
+    console.log('[Queue] Post queue processor stopped');
+  }
+}
+
+async function processPostQueue() {
+  try {
+    const queue = store.getPostQueue();
+    const queuedPosts = queue.filter(p => p.status === 'queued' && p.autoPost);
+    
+    if (queuedPosts.length === 0) {
+      return; // No posts to process
+    }
+    
+    console.log('[Queue] Processing', queuedPosts.length, 'queued posts...');
+    
+    // Check if we can post (rate limit)
+    const lastRateLimit = store.get('lastRateLimit');
+    const now = new Date();
+    
+    if (lastRateLimit) {
+      const rateLimitEnd = new Date(lastRateLimit);
+      if (now < rateLimitEnd) {
+        console.log('[Queue] Rate limit active until:', rateLimitEnd.toLocaleString());
+        return; // Still rate limited
+      }
+    }
+    
+    // Check safe mode
+    const safeMode = store.get('safeMode', true);
+    if (safeMode) {
+      console.log('[Queue] Safe mode enabled, skipping queue processing');
+      return;
+    }
+    
+    // Process one post at a time
+    const postToProcess = queuedPosts[0];
+    console.log('[Queue] Processing post:', postToProcess.title);
+    
+    try {
+      // Update status to processing
+      store.updateQueueItemStatus(postToProcess.id, 'processing');
+      
+      // Publish the post
+      const result = await publishPostToMoltbook({
+        submolt: postToProcess.submolt,
+        title: postToProcess.title,
+        body: postToProcess.body
+      });
+      
+      if (result.success) {
+        console.log('[Queue] ✅ Post published successfully:', postToProcess.title);
+        
+        // Save to posts
+        const publishedPost = {
+          id: result.postId || Date.now(),
+          title: postToProcess.title,
+          body: postToProcess.body,
+          submolt: postToProcess.submolt,
+          publishedAt: new Date().toISOString(),
+          url: result.url,
+          fromQueue: true
+        };
+        
+        store.savePost(publishedPost);
+        
+        // Remove from queue
+        store.removeFromPostQueue(postToProcess.id);
+        
+        // Update rate limit
+        if (result.rateLimitInfo && result.rateLimitInfo.nextPostAllowed) {
+          store.set('lastRateLimit', result.rateLimitInfo.nextPostAllowed);
+        }
+        
+        // Notify frontend
+        if (mainWindow) {
+          mainWindow.webContents.send('queue-post-published', {
+            post: publishedPost,
+            queueLength: store.getPostQueue().length
+          });
+        }
+        
+        store.audit('post.auto_published', { 
+          id: publishedPost.id, 
+          title: postToProcess.title,
+          fromQueue: true 
+        });
+        
+      } else {
+        console.error('[Queue] ❌ Failed to publish post:', result.error);
+        store.updateQueueItemStatus(postToProcess.id, 'failed', result.error);
+      }
+      
+    } catch (error) {
+      console.error('[Queue] ❌ Error processing post:', error);
+      store.updateQueueItemStatus(postToProcess.id, 'failed', error.message);
+    }
+    
+  } catch (error) {
+    console.error('[Queue] ❌ Queue processor error:', error);
+  }
+}
+
+// Helper function to publish post (extracted from existing publish handler)
+async function publishPostToMoltbook(data) {
+  const agent = store.getAgent();
+  if (!agent) {
+    return { success: false, error: 'No agent registered' };
+  }
+
+  const https = require('https');
+  const postData = JSON.stringify({
+    submolt: data.submolt,
+    title: data.title,
+    content: data.body, // Use 'content' field for Moltbook
+  });
+
+  return new Promise((resolve) => {
+    const options = {
+      hostname: 'www.moltbook.com',
+      path: '/api/v1/posts',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${agent.apiKey}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+        'User-Agent': 'WATAM-AI/1.2.0',
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let responseData = '';
+      res.on('data', (chunk) => { responseData += chunk; });
+      res.on('end', () => {
+        if (res.statusCode === 200 || res.statusCode === 201) {
+          try {
+            const parsed = JSON.parse(responseData);
+            resolve({
+              success: true,
+              postId: parsed.id,
+              url: parsed.url || `https://www.moltbook.com/post/${parsed.id}`,
+              rateLimitInfo: {
+                nextPostAllowed: new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 min
+              }
+            });
+          } catch (e) {
+            resolve({ success: true, postId: Date.now() });
+          }
+        } else if (res.statusCode === 429) {
+          resolve({
+            success: false,
+            error: 'Rate limited',
+            rateLimitInfo: {
+              nextPostAllowed: new Date(Date.now() + 30 * 60 * 1000).toISOString()
+            }
+          });
+        } else {
+          resolve({ success: false, error: `HTTP ${res.statusCode}: ${responseData}` });
+        }
+      });
+    });
+
+    req.on('error', (error) => {
+      resolve({ success: false, error: error.message });
+    });
+
+    req.write(postData);
+    req.end();
+  });
+}
 
 // Simple config store using JSON file
 class SimpleStore {
@@ -211,6 +402,79 @@ class SimpleStore {
       return false;
     }
   }
+
+  // Post Queue Management
+  getPostQueue() {
+    try {
+      const queuePath = path.join(app.getPath('userData'), 'post_queue.json');
+      if (fs.existsSync(queuePath)) {
+        return JSON.parse(fs.readFileSync(queuePath, 'utf8'));
+      }
+    } catch (error) {
+      console.error('Failed to load post queue:', error);
+    }
+    return [];
+  }
+
+  addToPostQueue(post) {
+    try {
+      const queue = this.getPostQueue();
+      const queueItem = {
+        id: Date.now(),
+        ...post,
+        queuedAt: new Date().toISOString(),
+        status: 'queued',
+        autoPost: true
+      };
+      
+      queue.push(queueItem);
+      
+      const queuePath = path.join(app.getPath('userData'), 'post_queue.json');
+      fs.writeFileSync(queuePath, JSON.stringify(queue, null, 2));
+      this.audit('post.queued', { id: queueItem.id, title: queueItem.title });
+      return queueItem;
+    } catch (error) {
+      console.error('Failed to add to post queue:', error);
+      return null;
+    }
+  }
+
+  removeFromPostQueue(id) {
+    try {
+      const queue = this.getPostQueue();
+      const filtered = queue.filter(p => p.id != id);
+      
+      const queuePath = path.join(app.getPath('userData'), 'post_queue.json');
+      fs.writeFileSync(queuePath, JSON.stringify(filtered, null, 2));
+      this.audit('post.dequeued', { id });
+      return true;
+    } catch (error) {
+      console.error('Failed to remove from post queue:', error);
+      return false;
+    }
+  }
+
+  updateQueueItemStatus(id, status, error = null) {
+    try {
+      const queue = this.getPostQueue();
+      const item = queue.find(p => p.id === id);
+      
+      if (item) {
+        item.status = status;
+        item.processedAt = new Date().toISOString();
+        if (error) item.error = error;
+        
+        const queuePath = path.join(app.getPath('userData'), 'post_queue.json');
+        fs.writeFileSync(queuePath, JSON.stringify(queue, null, 2));
+        this.audit('post.queue_updated', { id, status, error });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to update queue item:', error);
+      return false;
+    }
+  }
 }
 
 const store = new SimpleStore();
@@ -329,6 +593,9 @@ app.on('ready', () => {
   setTimeout(() => {
     const wasRunning = store.get('agentRunning', false);
     const autoReplyEnabled = store.get('autoReplyEnabled', false);
+    
+    // Always start queue processor
+    startQueueProcessor();
     
     if (wasRunning && autoReplyEnabled) {
       console.log('[AI] Agent was running before, auto-starting...');
@@ -668,6 +935,9 @@ async function verifyMoltbookIdentityToken(identityToken, appKey) {
     req.end();
   });
 }
+
+// Moltbook API: Check agent status
+async function checkMoltbookStatus(apiKey) {
   const https = require('https');
   const url = `${MOLTBOOK_BASE_URL}/api/v1/agents/me`;
 
@@ -814,6 +1084,7 @@ async function verifyMoltbookIdentityToken(identityToken, appKey) {
 
     req.end();
   });
+}
 
 // Test API key permissions by trying to access agent-specific endpoints
 async function testApiKeyPermissions(apiKey) {
@@ -1285,6 +1556,32 @@ ipcMain.handle('get-config', () => {
   };
 });
 
+ipcMain.handle('get-rate-limit-status', async () => {
+  try {
+    const lastRateLimit = store.get('lastRateLimit');
+    if (lastRateLimit) {
+      const nextAllowedTime = new Date(lastRateLimit.nextAllowedTime);
+      const now = new Date();
+      
+      if (now < nextAllowedTime) {
+        return {
+          success: true,
+          isActive: true,
+          nextAllowedTime: lastRateLimit.nextAllowedTime,
+          minutesLeft: Math.ceil((nextAllowedTime - now) / (1000 * 60))
+        };
+      } else {
+        // Rate limit expired, clear it
+        store.set('lastRateLimit', null);
+      }
+    }
+    
+    return { success: true, isActive: false };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('save-config', (event, config) => {
   if (config.safeMode !== undefined) store.set('safeMode', config.safeMode);
   if (config.agentName) store.set('agentName', config.agentName);
@@ -1614,21 +1911,6 @@ ipcMain.handle('publish-post', async (event, data) => {
     return { success: false, error: 'Agent is not active. Please complete the claim process first.' };
   }
 
-  // Show confirmation dialog
-  const response = await dialog.showMessageBox(mainWindow, {
-    type: 'warning',
-    title: 'Confirm Publish',
-    message: 'Are you sure you want to publish this post to Moltbook?',
-    detail: `Submolt: ${data.submolt}\nTitle: ${data.title}`,
-    buttons: ['Cancel', 'Publish'],
-    defaultId: 0,
-    cancelId: 0,
-  });
-
-  if (response.response !== 1) {
-    return { success: false, error: 'Cancelled by user' };
-  }
-
   try {
     const https = require('https');
     const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
@@ -1637,7 +1919,7 @@ ipcMain.handle('publish-post', async (event, data) => {
     const postData = JSON.stringify({
       submolt: data.submolt,
       title: data.title,
-      body: data.body,
+      content: data.body, // Moltbook API uses 'content', not 'body'
     });
 
     const result = await new Promise((resolve, reject) => {
@@ -1667,11 +1949,20 @@ ipcMain.handle('publish-post', async (event, data) => {
         res.on('end', () => {
           console.log('[Main] Response status:', res.statusCode);
           console.log('[Main] Response data:', responseData);
+          console.log('[Main] 📤 Original post data sent:', postData);
           
           if (res.statusCode === 200 || res.statusCode === 201) {
             try {
               const parsed = JSON.parse(responseData);
               console.log('[Main] Parsed response:', JSON.stringify(parsed, null, 2));
+              
+              // Debug: Check if body was included in response
+              if (parsed.body || (parsed.post && parsed.post.body) || (parsed.data && parsed.data.body)) {
+                console.log('[Main] ✅ Body found in response');
+              } else {
+                console.log('[Main] ⚠️ Body NOT found in response - this might be normal');
+              }
+              
               resolve(parsed);
             } catch (error) {
               console.error('[Main] JSON parse error:', error);
@@ -1765,14 +2056,33 @@ ipcMain.handle('publish-post', async (event, data) => {
     
     store.savePost(post);
 
+    // Set rate limit info for successful posts (Moltbook has 30-minute limit)
+    const rateLimitInfo = {
+      timestamp: new Date().toISOString(),
+      retryAfter: 30, // 30 minutes
+      nextAllowedTime: new Date(Date.now() + 30 * 60 * 1000).toISOString()
+    };
+    store.set('lastRateLimit', rateLimitInfo);
+
     store.audit('post.published', { submolt: data.submolt, title: data.title, id: post.id });
-    return { success: true, post };
+    
+    // Return success with rate limit info
+    return { 
+      success: true, 
+      post,
+      rateLimitInfo: {
+        nextPostAllowed: rateLimitInfo.nextAllowedTime,
+        minutesUntilNext: 30
+      }
+    };
   } catch (error) {
     console.error('Publish error:', error);
     store.audit('post.publish_failed', { error: error.message });
     
     // Parse error message if it's JSON
     let errorMessage = error.message;
+    let isRateLimit = false;
+    
     try {
       if (errorMessage.includes('{')) {
         const jsonStart = errorMessage.indexOf('{');
@@ -1784,12 +2094,32 @@ ipcMain.handle('publish-post', async (event, data) => {
             errorMessage += '. ' + errorObj.hint;
           }
           if (errorObj.retry_after_minutes) {
-            errorMessage += ` (Retry after ${errorObj.retry_after_minutes} minutes)`;
+            isRateLimit = true;
+            const retryMinutes = errorObj.retry_after_minutes;
+            
+            // Store rate limit info
+            const rateLimitInfo = {
+              timestamp: new Date().toISOString(),
+              retryAfter: retryMinutes,
+              nextAllowedTime: new Date(Date.now() + retryMinutes * 60 * 1000).toISOString()
+            };
+            store.set('lastRateLimit', rateLimitInfo);
+            
+            errorMessage += ` (Next post allowed at ${new Date(rateLimitInfo.nextAllowedTime).toLocaleTimeString()})`;
           }
         }
       }
     } catch (parseError) {
       // Keep original error message
+    }
+    
+    // Check if this is a repeated rate limit warning
+    if (isRateLimit) {
+      const lastRateLimit = store.get('lastRateLimit');
+      if (lastRateLimit && new Date(lastRateLimit.timestamp) > new Date(Date.now() - 5 * 60 * 1000)) {
+        // If we got rate limited in the last 5 minutes, show a friendlier message
+        errorMessage = `⏱️ Post rate limit active. Next post allowed at ${new Date(lastRateLimit.nextAllowedTime).toLocaleTimeString()}`;
+      }
     }
     
     return { success: false, error: errorMessage };
@@ -1829,6 +2159,71 @@ ipcMain.handle('get-posts', async () => {
   try {
     const posts = store.getPosts();
     return { success: true, posts };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Post Queue handlers
+ipcMain.handle('get-post-queue', async () => {
+  try {
+    const queue = store.getPostQueue();
+    return { success: true, queue };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('add-to-post-queue', async (event, post) => {
+  try {
+    const queueItem = store.addToPostQueue(post);
+    if (queueItem) {
+      console.log('[Queue] Post added to queue:', queueItem.title);
+      
+      // Start queue processor if not running
+      startQueueProcessor();
+      
+      return { success: true, queueItem };
+    } else {
+      return { success: false, error: 'Failed to add to queue' };
+    }
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('remove-from-post-queue', async (event, id) => {
+  try {
+    const success = store.removeFromPostQueue(id);
+    return { success };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('toggle-auto-post', async (event, { draftId, enabled }) => {
+  try {
+    // Get draft and add/remove from queue
+    const drafts = store.getDrafts();
+    const draft = drafts.find(d => d.id === draftId);
+    
+    if (!draft) {
+      return { success: false, error: 'Draft not found' };
+    }
+    
+    if (enabled) {
+      // Add to queue
+      const queueItem = store.addToPostQueue(draft);
+      return { success: true, queued: true, queueItem };
+    } else {
+      // Remove from queue
+      const queue = store.getPostQueue();
+      const queueItem = queue.find(q => q.title === draft.title && q.body === draft.body);
+      if (queueItem) {
+        store.removeFromPostQueue(queueItem.id);
+      }
+      return { success: true, queued: false };
+    }
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1933,24 +2328,268 @@ ipcMain.handle('get-post-comments', async (event, postId) => {
   }
 });
 
-ipcMain.handle('test-heartbeat', async () => {
+ipcMain.handle('debug-agent-issues', async () => {
   try {
-    console.log('[Test] 🧪 Manual heartbeat test triggered');
-    await runMoltbookHeartbeat();
-    return { success: true, message: 'Heartbeat test completed - check console for details' };
+    console.log('[Debug] ========================================');
+    console.log('[Debug] 🔧 AUTOMATIC ISSUE DIAGNOSIS & FIXING');
+    console.log('[Debug] ========================================');
+    
+    let fixesApplied = [];
+    let issuesFound = [];
+    
+    // Step 1: Check AI configuration
+    console.log('[Debug] 1️⃣ Checking AI configuration...');
+    const config = {
+      aiProvider: store.get('aiProvider'),
+      aiApiKey: store.get('aiApiKey'),
+      aiModel: store.get('aiModel'),
+      autoReplyEnabled: store.get('autoReplyEnabled', false),
+    };
+    
+    if (!config.aiProvider) {
+      issuesFound.push('No AI provider configured');
+      console.log('[Debug] ❌ No AI provider configured');
+    } else {
+      console.log('[Debug] ✅ AI provider:', config.aiProvider);
+    }
+    
+    if (config.aiProvider !== 'ollama' && !config.aiApiKey) {
+      issuesFound.push('No AI API key configured');
+      console.log('[Debug] ❌ No AI API key for provider:', config.aiProvider);
+    } else if (config.aiProvider !== 'ollama') {
+      console.log('[Debug] ✅ AI API key configured');
+    }
+    
+    if (!config.autoReplyEnabled) {
+      issuesFound.push('Auto-reply not enabled');
+      console.log('[Debug] ❌ Auto-reply not enabled');
+    } else {
+      console.log('[Debug] ✅ Auto-reply enabled');
+    }
+    
+    // Step 2: Check agent registration
+    console.log('[Debug] 2️⃣ Checking agent registration...');
+    const agent = store.getAgent();
+    if (!agent) {
+      issuesFound.push('No agent registered');
+      console.log('[Debug] ❌ No agent registered');
+    } else {
+      console.log('[Debug] ✅ Agent registered:', agent.name);
+      console.log('[Debug] 📊 Agent status:', agent.status);
+      
+      // Check agent status in real-time
+      if (agent.status !== 'active') {
+        console.log('[Debug] 🔄 Checking agent status in real-time...');
+        try {
+          const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+          const statusResult = await checkMoltbookStatus(apiKey);
+          
+          if (statusResult.status === 'active') {
+            console.log('[Debug] ✅ Agent status updated to active');
+            agent.status = 'active';
+            agent.lastCheckedAt = new Date().toISOString();
+            store.saveAgent(agent);
+            fixesApplied.push('Updated agent status to active');
+          } else {
+            issuesFound.push(`Agent status: ${statusResult.status}`);
+            console.log('[Debug] ❌ Agent still not active:', statusResult.status);
+          }
+        } catch (error) {
+          issuesFound.push('Agent status check failed');
+          console.log('[Debug] ❌ Agent status check failed:', error.message);
+        }
+      }
+    }
+    
+    // Step 3: Test feed access
+    if (agent && agent.status === 'active') {
+      console.log('[Debug] 3️⃣ Testing feed access...');
+      try {
+        const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+        const feed = await fetchMoltbookFeed(apiKey);
+        
+        if (feed && feed.posts) {
+          console.log('[Debug] ✅ Feed access working, found', feed.posts.length, 'posts');
+        } else {
+          issuesFound.push('Feed access returns no posts');
+          console.log('[Debug] ❌ Feed access returns no posts');
+        }
+      } catch (error) {
+        issuesFound.push('Feed access failed');
+        console.log('[Debug] ❌ Feed access failed:', error.message);
+      }
+    }
+    
+    // Step 4: Check Safe Mode
+    console.log('[Debug] 4️⃣ Checking Safe Mode...');
+    const safeMode = store.get('safeMode', true);
+    if (safeMode) {
+      issuesFound.push('Safe Mode is enabled (blocks posting)');
+      console.log('[Debug] ⚠️ Safe Mode is enabled');
+    } else {
+      console.log('[Debug] ✅ Safe Mode is disabled');
+    }
+    
+    // Step 5: Check rate limits
+    console.log('[Debug] 5️⃣ Checking rate limits...');
+    const lastRateLimit = store.get('lastRateLimit');
+    if (lastRateLimit) {
+      const nextAllowedTime = new Date(lastRateLimit.nextAllowedTime);
+      const now = new Date();
+      
+      if (now < nextAllowedTime) {
+        const minutesLeft = Math.ceil((nextAllowedTime - now) / (1000 * 60));
+        issuesFound.push(`Rate limited for ${minutesLeft} more minutes`);
+        console.log('[Debug] ⏱️ Rate limited for', minutesLeft, 'more minutes');
+      } else {
+        console.log('[Debug] ✅ No active rate limits');
+        // Clear expired rate limit
+        store.set('lastRateLimit', null);
+        fixesApplied.push('Cleared expired rate limit');
+      }
+    } else {
+      console.log('[Debug] ✅ No rate limits');
+    }
+    
+    // Step 6: Check filters
+    console.log('[Debug] 6️⃣ Checking filters...');
+    const submolts = store.get('replySubmolts', '');
+    const keywords = store.get('replyKeywords', '');
+    
+    if (!submolts && !keywords) {
+      console.log('[Debug] ⚠️ No filters configured - agent will reply to all posts');
+      console.log('[Debug] 💡 Consider adding submolt or keyword filters to be more selective');
+    } else {
+      console.log('[Debug] 📋 Filters configured:', {
+        submolts: submolts || 'none',
+        keywords: keywords || 'none',
+      });
+    }
+    
+    // Summary
+    console.log('[Debug] ========================================');
+    console.log('[Debug] 🔧 DIAGNOSIS COMPLETE');
+    console.log('[Debug] Issues Found:', issuesFound.length);
+    issuesFound.forEach((issue, i) => {
+      console.log(`[Debug] ${i + 1}. ${issue}`);
+    });
+    console.log('[Debug] Fixes Applied:', fixesApplied.length);
+    fixesApplied.forEach((fix, i) => {
+      console.log(`[Debug] ${i + 1}. ${fix}`);
+    });
+    console.log('[Debug] ========================================');
+    
+    const recommendations = generateRecommendations(issuesFound);
+    
+    return {
+      success: true,
+      issuesFound,
+      fixesApplied,
+      recommendations,
+    };
   } catch (error) {
-    console.error('[Test] ❌ Heartbeat test failed:', error);
+    console.error('[Debug] ❌ Debug process failed:', error);
     return { success: false, error: error.message };
   }
 });
 
+function generateRecommendations(issues) {
+  const recommendations = [];
+  
+  if (issues.some(i => i.includes('No AI provider'))) {
+    recommendations.push('Go to AI Config tab and select an AI provider (Groq is free)');
+  }
+  
+  if (issues.some(i => i.includes('No AI API key'))) {
+    recommendations.push('Go to AI Config tab and add your AI API key');
+  }
+  
+  if (issues.some(i => i.includes('Auto-reply not enabled'))) {
+    recommendations.push('Go to AI Config tab and enable auto-reply');
+  }
+  
+  if (issues.some(i => i.includes('No agent registered'))) {
+    recommendations.push('Go to Settings tab and register a Moltbook agent');
+  }
+  
+  if (issues.some(i => i.includes('Agent status'))) {
+    recommendations.push('Go to Settings tab and complete the agent claim process on Moltbook');
+  }
+  
+  if (issues.some(i => i.includes('Safe Mode'))) {
+    recommendations.push('Disable Safe Mode in Settings to allow posting');
+  }
+  
+  if (issues.some(i => i.includes('Rate limited'))) {
+    recommendations.push('Wait for rate limit to expire, then try again');
+  }
+  
+  if (issues.some(i => i.includes('Feed access'))) {
+    recommendations.push('Check network connection and Moltbook server status');
+  }
+  
+  if (issues.length === 0) {
+    recommendations.push('Configuration looks good! Agent should be working properly.');
+  }
+  
+  return recommendations;
+}
+
 ipcMain.handle('test-agent-loop', async () => {
   try {
-    console.log('[Test] 🧪 Manual agent loop test triggered');
+    console.log('[Test] ========================================');
+    console.log('[Test] 🧪 MANUAL AGENT LOOP TEST TRIGGERED');
+    console.log('[Test] ========================================');
+    
+    // Check configuration first
+    const config = {
+      aiProvider: store.get('aiProvider'),
+      aiApiKey: store.get('aiApiKey'),
+      aiModel: store.get('aiModel'),
+      autoReplyEnabled: store.get('autoReplyEnabled', false),
+      replySubmolts: store.get('replySubmolts', ''),
+      replyKeywords: store.get('replyKeywords', ''),
+      maxRepliesPerHour: store.get('maxRepliesPerHour', 10),
+    };
+    
+    console.log('[Test] 📋 Configuration check:', {
+      hasAiProvider: !!config.aiProvider,
+      hasApiKey: !!config.aiApiKey,
+      hasModel: !!config.aiModel,
+      autoReplyEnabled: config.autoReplyEnabled,
+      hasSubmolts: !!config.replySubmolts,
+      hasKeywords: !!config.replyKeywords,
+      maxPerHour: config.maxRepliesPerHour,
+    });
+    
+    // Check agent status
+    const agent = store.getAgent();
+    console.log('[Test] 👤 Agent check:', {
+      hasAgent: !!agent,
+      agentName: agent?.name,
+      agentStatus: agent?.status,
+      lastChecked: agent?.lastCheckedAt,
+    });
+    
+    // Check rate limits
+    console.log('[Test] ⏱️ Rate limit check:', {
+      repliesThisHour: agentRepliesThisHour,
+      maxPerHour: config.maxRepliesPerHour,
+      isRateLimited: agentRepliesThisHour >= config.maxRepliesPerHour,
+    });
+    
+    // Run the actual agent loop
+    console.log('[Test] 🚀 Running agent loop...');
     await runAgentLoop();
-    return { success: true, message: 'Agent loop test completed - check console for details' };
+    
+    console.log('[Test] ========================================');
+    console.log('[Test] ✅ AGENT LOOP TEST COMPLETED');
+    console.log('[Test] ========================================');
+    
+    return { success: true, message: 'Agent loop test completed - check console for detailed logs' };
   } catch (error) {
     console.error('[Test] ❌ Agent loop test failed:', error);
+    console.error('[Test] ========================================');
     return { success: false, error: error.message };
   }
 });
@@ -2034,12 +2673,19 @@ ipcMain.handle('reply-to-post', async (event, { postId, body }) => {
       
       if (statusCheck.status !== 'active') {
         console.error('[Reply] ❌ Agent not active:', statusCheck.status);
+        console.error('[Reply] 💡 SOLUTION STEPS:');
+        console.error('[Reply] 1. Go to Settings tab');
+        console.error('[Reply] 2. Find your Claim URL and Verification Code');
+        console.error('[Reply] 3. Open the Claim URL in browser');
+        console.error('[Reply] 4. Complete the claim process on Moltbook');
+        console.error('[Reply] 5. Return to Settings and click "Check Status"');
+        
         if (statusCheck.status === 'claim_pending') {
-          return { success: false, error: '⚠️ Claim not completed. Please complete the claim process on Moltbook first.' };
+          return { success: false, error: '⚠️ Claim not completed. Please complete the claim process on Moltbook first. Check Settings for Claim URL.' };
         } else if (statusCheck.status === 'error') {
-          return { success: false, error: '❌ Agent status: error. This means the claim is not completed. Please complete the claim process on Moltbook first.' };
+          return { success: false, error: '❌ Agent status: error. This means the claim is not completed. Please complete the claim process on Moltbook first. Check Settings for Claim URL.' };
         } else {
-          return { success: false, error: `⚠️ Agent status: ${statusCheck.status}. Please check Settings.` };
+          return { success: false, error: `⚠️ Agent status: ${statusCheck.status}. Please check Settings and complete claim process.` };
         }
       }
       
@@ -2096,7 +2742,7 @@ ipcMain.handle('reply-to-post', async (event, { postId, body }) => {
     const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
     console.log('[Reply] Using API key for POST request:', maskApiKey(apiKey));
 
-    const postData = JSON.stringify({ body });
+    const postData = JSON.stringify({ content: body }); // Moltbook API uses 'content'
 
     const result = await new Promise((resolve, reject) => {
       // Set timeout for slow Moltbook server (2 minutes)
@@ -2229,7 +2875,7 @@ ipcMain.handle('reply-to-comment', async (event, { postId, commentId, body }) =>
     const https = require('https');
     const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
 
-    const postData = JSON.stringify({ body });
+    const postData = JSON.stringify({ content: body }); // Moltbook API uses 'content'
 
     const result = await new Promise((resolve, reject) => {
       const options = {
@@ -2956,7 +3602,16 @@ async function fetchMoltbookFeed(apiKey) {
   const https = require('https');
   const url = `${MOLTBOOK_BASE_URL}/api/v1/feed`;
 
+  console.log('[Feed] 📡 Fetching feed from:', url);
+  console.log('[Feed] 🔑 Using API key:', maskApiKey(apiKey));
+
   return new Promise((resolve, reject) => {
+    // Set timeout for slow Moltbook server (2 minutes)
+    const timeout = setTimeout(() => {
+      req.destroy();
+      reject(new Error('⏱️ Moltbook server timeout (2 min). Server is very slow, please try again later.'));
+    }, 120000);
+
     const options = {
       method: 'GET',
       headers: {
@@ -2967,9 +3622,11 @@ async function fetchMoltbookFeed(apiKey) {
     };
 
     const req = https.request(url, options, (res) => {
+      clearTimeout(timeout);
       let data = '';
 
       if (res.statusCode === 301 || res.statusCode === 302) {
+        console.error('[Feed] ❌ Redirect detected - ensure using https://www.moltbook.com');
         reject(new Error('Redirect detected'));
         return;
       }
@@ -2979,21 +3636,71 @@ async function fetchMoltbookFeed(apiKey) {
       });
 
       res.on('end', () => {
+        console.log('[Feed] 📡 Response status:', res.statusCode);
+        console.log('[Feed] 📄 Response size:', data.length, 'bytes');
+        
         if (res.statusCode === 200) {
           try {
             const result = JSON.parse(data);
-            resolve(result);
+            console.log('[Feed] ✅ Feed parsed successfully');
+            console.log('[Feed] 📊 Feed structure:', {
+              hasPosts: !!result.posts,
+              postsCount: result.posts ? result.posts.length : 0,
+              hasData: !!result.data,
+              keys: Object.keys(result),
+            });
+            
+            // Handle different possible response structures
+            if (result.posts && Array.isArray(result.posts)) {
+              console.log('[Feed] ✅ Found posts array with', result.posts.length, 'posts');
+              resolve(result);
+            } else if (result.data && result.data.posts && Array.isArray(result.data.posts)) {
+              console.log('[Feed] ✅ Found posts in data wrapper with', result.data.posts.length, 'posts');
+              resolve({ posts: result.data.posts });
+            } else if (Array.isArray(result)) {
+              console.log('[Feed] ✅ Response is array with', result.length, 'posts');
+              resolve({ posts: result });
+            } else {
+              console.error('[Feed] ❌ Unexpected response structure:', Object.keys(result));
+              console.error('[Feed] 📄 Response preview:', JSON.stringify(result, null, 2).substring(0, 500));
+              reject(new Error('Unexpected feed response structure - no posts array found'));
+            }
           } catch (error) {
-            reject(new Error('Invalid JSON response'));
+            console.error('[Feed] ❌ JSON parse error:', error.message);
+            console.error('[Feed] 📄 Raw response preview:', data.substring(0, 500));
+            reject(new Error('Invalid JSON response from feed endpoint'));
           }
+        } else if (res.statusCode === 401) {
+          console.error('[Feed] ❌ 401 Unauthorized - API key invalid or expired');
+          reject(new Error('API key invalid or expired - cannot access feed'));
+        } else if (res.statusCode === 403) {
+          console.error('[Feed] ❌ 403 Forbidden - insufficient permissions');
+          reject(new Error('Insufficient permissions - agent claim might not be completed'));
+        } else if (res.statusCode === 404) {
+          console.error('[Feed] ❌ 404 Not Found - feed endpoint not available');
+          reject(new Error('Feed endpoint not found - API might have changed'));
         } else {
-          reject(new Error(`Failed to fetch feed: ${res.statusCode} - ${data}`));
+          console.error('[Feed] ❌ HTTP error:', res.statusCode);
+          console.error('[Feed] 📄 Response body:', data.substring(0, 500));
+          reject(new Error(`Failed to fetch feed: HTTP ${res.statusCode} - ${data.substring(0, 200)}`));
         }
       });
     });
 
     req.on('error', (error) => {
-      reject(error);
+      clearTimeout(timeout);
+      console.error('[Feed] ❌ Request error:', error);
+      
+      // Better error messages
+      if (error.code === 'ECONNREFUSED') {
+        reject(new Error('🔌 Cannot connect to Moltbook server. Server might be down.'));
+      } else if (error.code === 'ETIMEDOUT' || error.code === 'ESOCKETTIMEDOUT') {
+        reject(new Error('⏱️ Moltbook server is very slow. Please try again later.'));
+      } else if (error.code === 'ENOTFOUND') {
+        reject(new Error('🌐 DNS resolution failed. Check internet connection.'));
+      } else {
+        reject(new Error(`🔌 Network error: ${error.message}`));
+      }
     });
 
     req.end();
@@ -3087,9 +3794,19 @@ async function fetchMoltbookFeedAlternative(apiKey) {
 async function postMoltbookReply(apiKey, postId, replyText) {
   const https = require('https');
 
+  console.log('[Reply] 📤 Posting reply to post:', postId);
+  console.log('[Reply] 🔑 Using API key:', maskApiKey(apiKey));
+  console.log('[Reply] 📝 Reply length:', replyText.length, 'characters');
+
   return new Promise((resolve, reject) => {
+    // Set timeout for slow Moltbook server (2 minutes)
+    const timeout = setTimeout(() => {
+      req.destroy();
+      reject(new Error('⏱️ Moltbook server timeout (2 min). Server is very slow, please try again later.'));
+    }, 120000);
+
     const postData = JSON.stringify({
-      body: replyText,
+      content: replyText, // Moltbook API uses 'content', not 'body'
     });
 
     const options = {
@@ -3104,7 +3821,15 @@ async function postMoltbookReply(apiKey, postId, replyText) {
       },
     };
 
+    console.log('[Reply] 📡 Request details:', {
+      hostname: options.hostname,
+      path: options.path,
+      method: options.method,
+      contentLength: options.headers['Content-Length'],
+    });
+
     const req = https.request(options, (res) => {
+      clearTimeout(timeout);
       let data = '';
 
       res.on('data', (chunk) => {
@@ -3112,25 +3837,91 @@ async function postMoltbookReply(apiKey, postId, replyText) {
       });
 
       res.on('end', () => {
-        console.log('[AI] Post reply response:', res.statusCode, data.substring(0, 200));
+        console.log('[Reply] 📡 Response status:', res.statusCode);
+        console.log('[Reply] 📄 Response size:', data.length, 'bytes');
+        console.log('[Reply] 📄 Response preview:', data.substring(0, 300));
+        
         if (res.statusCode === 200 || res.statusCode === 201) {
           try {
             const result = JSON.parse(data);
-            resolve(result);
+            console.log('[Reply] ✅ Reply posted successfully');
+            console.log('[Reply] 📊 Response structure:', {
+              hasId: !!result.id,
+              hasComment: !!result.comment,
+              hasData: !!result.data,
+              keys: Object.keys(result),
+            });
+            resolve({ success: true, result });
           } catch (error) {
-            reject(new Error('Invalid JSON response'));
+            console.error('[Reply] ❌ JSON parse error:', error.message);
+            console.error('[Reply] 📄 Raw response:', data);
+            reject(new Error('Invalid JSON response from reply endpoint'));
           }
-        } else if (res.statusCode === 401 || res.statusCode === 403) {
-          reject(new Error('⚠️ Authentication failed. Please complete the claim process on Moltbook.'));
+        } else if (res.statusCode === 401) {
+          console.error('[Reply] ❌ 401 Unauthorized - API key invalid or expired');
+          console.error('[Reply] 💡 SOLUTION: Complete agent claim process on Moltbook');
+          reject(new Error('⚠️ Authentication failed. API key invalid or expired. Please complete the claim process on Moltbook.'));
+        } else if (res.statusCode === 403) {
+          console.error('[Reply] ❌ 403 Forbidden - insufficient permissions');
+          console.error('[Reply] 💡 SOLUTION: Complete agent claim process on Moltbook');
+          reject(new Error('⚠️ Authentication failed. Insufficient permissions. Please complete the claim process on Moltbook.'));
+        } else if (res.statusCode === 404) {
+          console.error('[Reply] ❌ 404 Not Found - post might not exist');
+          reject(new Error('Post not found - it might have been deleted'));
+        } else if (res.statusCode === 429) {
+          console.error('[Reply] ❌ 429 Rate Limited');
+          
+          // Try to extract rate limit info from response
+          let rateLimitMessage = 'Rate limit exceeded';
+          try {
+            const errorData = JSON.parse(data);
+            if (errorData.retry_after_minutes) {
+              rateLimitMessage += `. Next reply allowed in ${errorData.retry_after_minutes} minutes`;
+            }
+            if (errorData.message) {
+              rateLimitMessage = errorData.message;
+            }
+          } catch (e) {
+            // Ignore JSON parse errors
+          }
+          
+          reject(new Error(rateLimitMessage));
         } else {
-          reject(new Error(`Failed to post reply: HTTP ${res.statusCode}`));
+          console.error('[Reply] ❌ HTTP error:', res.statusCode);
+          console.error('[Reply] 📄 Error response:', data);
+          
+          // Try to extract error message from response
+          let errorMessage = `Failed to post reply: HTTP ${res.statusCode}`;
+          try {
+            const errorData = JSON.parse(data);
+            if (errorData.error) {
+              errorMessage = errorData.error;
+            } else if (errorData.message) {
+              errorMessage = errorData.message;
+            }
+          } catch (e) {
+            // Ignore JSON parse errors
+          }
+          
+          reject(new Error(errorMessage));
         }
       });
     });
 
     req.on('error', (error) => {
-      console.error('[AI] Post reply error:', error);
-      reject(error);
+      clearTimeout(timeout);
+      console.error('[Reply] ❌ Request error:', error);
+      
+      // Better error messages
+      if (error.code === 'ECONNREFUSED') {
+        reject(new Error('🔌 Cannot connect to Moltbook server. Server might be down.'));
+      } else if (error.code === 'ETIMEDOUT' || error.code === 'ESOCKETTIMEDOUT') {
+        reject(new Error('⏱️ Moltbook server is very slow. Please try again later.'));
+      } else if (error.code === 'ENOTFOUND') {
+        reject(new Error('🌐 DNS resolution failed. Check internet connection.'));
+      } else {
+        reject(new Error(`🔌 Network error: ${error.message}`));
+      }
     });
 
     req.write(postData);
@@ -3173,6 +3964,19 @@ async function runAgentLoop() {
       maxPerHour: config.maxRepliesPerHour,
     });
     
+    // Check AI provider configuration first
+    if (!config.aiProvider) {
+      console.error('[AI] ❌ No AI provider configured');
+      console.error('[AI] 💡 SOLUTION: Go to AI Config tab and configure an AI provider');
+      return;
+    }
+    
+    if (config.aiProvider !== 'ollama' && !config.aiApiKey) {
+      console.error('[AI] ❌ No AI API key configured for provider:', config.aiProvider);
+      console.error('[AI] 💡 SOLUTION: Go to AI Config tab and add your API key');
+      return;
+    }
+    
     // Check rate limit
     if (agentRepliesThisHour >= config.maxRepliesPerHour) {
       console.log('[AI] ⏱️ Rate limit reached:', agentRepliesThisHour, '/', config.maxRepliesPerHour);
@@ -3184,15 +3988,63 @@ async function runAgentLoop() {
     const agent = store.getAgent();
     if (!agent) {
       console.error('[AI] ❌ No agent registered');
+      console.error('[AI] 💡 SOLUTION: Go to Settings tab and register a Moltbook agent');
       return;
     }
     
-    if (agent.status !== 'active') {
-      console.error('[AI] ❌ Agent not active, status:', agent.status);
-      return;
-    }
+    console.log('[AI] 🔍 Agent status check:', {
+      name: agent.name,
+      status: agent.status,
+      lastChecked: agent.lastCheckedAt,
+    });
     
-    console.log('[AI] ✅ Agent is active:', agent.name);
+    // Always check agent status in real-time for better reliability
+    console.log('[AI] 🔄 Checking agent status in real-time...');
+    try {
+      const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+      const statusResult = await checkMoltbookStatus(apiKey);
+      
+      console.log('[AI] 📊 Status check result:', {
+        status: statusResult.status,
+        statusCode: statusResult.statusCode,
+        hasData: !!statusResult.data,
+      });
+      
+      if (statusResult.status === 'active') {
+        console.log('[AI] ✅ Agent is ACTIVE and ready to post');
+        agent.status = 'active';
+        agent.lastCheckedAt = new Date().toISOString();
+        store.saveAgent(agent);
+      } else {
+        console.error('[AI] ❌ Agent not active, status:', statusResult.status);
+        console.error('[AI] 🚨 CRITICAL: Agent cannot interact with posts until claim is completed!');
+        console.error('[AI] 📋 TO FIX THIS:');
+        console.error('[AI] 1. Open WATAM AI Settings tab');
+        console.error('[AI] 2. Look for "Claim URL" and "Verification Code"');
+        console.error('[AI] 3. Click "Open" next to Claim URL');
+        console.error('[AI] 4. Complete ALL steps on Moltbook website');
+        console.error('[AI] 5. Return to Settings and click "Check Status"');
+        console.error('[AI] ⚠️ Agent will remain inactive until this is done!');
+        
+        // Update status in storage
+        agent.status = statusResult.status;
+        agent.lastCheckedAt = new Date().toISOString();
+        store.saveAgent(agent);
+        return;
+      }
+    } catch (statusError) {
+      console.error('[AI] ❌ Status check failed:', statusError.message);
+      console.error('[AI] 🔌 This could be a network issue or Moltbook server problem');
+      
+      // If cached status is not active, don't proceed
+      if (agent.status !== 'active') {
+        console.error('[AI] ❌ Cached agent status is not active:', agent.status);
+        console.error('[AI] 💡 Cannot proceed without active agent status');
+        return;
+      }
+      
+      console.warn('[AI] ⚠️ Using cached agent status (active) due to status check error');
+    }
     
     // Fetch feed
     const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
@@ -3213,81 +4065,242 @@ async function runAgentLoop() {
         console.log('[AI] ✅ Alternative feed method worked');
       } catch (altError) {
         console.error('[AI] ❌ All feed methods failed:', altError.message);
+        console.error('[AI] 🔌 This could be:');
+        console.error('[AI] - Moltbook server is down');
+        console.error('[AI] - API endpoints have changed');
+        console.error('[AI] - Network connectivity issues');
+        console.error('[AI] - Agent API key lacks feed access permissions');
         return;
       }
     }
     
     if (!feed || !feed.posts || feed.posts.length === 0) {
-      console.log('[AI] ⚠️ No posts in feed');
+      console.log('[AI] ⚠️ No posts in feed - this could be normal if no new posts');
+      console.log('[AI] 📊 Feed structure:', {
+        hasFeed: !!feed,
+        hasPosts: !!(feed && feed.posts),
+        postsLength: feed && feed.posts ? feed.posts.length : 0,
+        feedKeys: feed ? Object.keys(feed) : [],
+      });
       return;
     }
     
     console.log('[AI] 📊 Fetched', feed.posts.length, 'posts from feed');
     
-    // Filter posts by submolts
-    let filteredPosts = feed.posts;
-    if (config.replySubmolts) {
+    // Debug: Show first few posts
+    console.log('[AI] 🔍 Sample posts from feed:');
+    feed.posts.slice(0, 3).forEach((post, i) => {
+      console.log(`[AI] Post ${i+1}:`, {
+        id: post.id,
+        title: post.title?.substring(0, 50) + '...',
+        submolt: post.submolt,
+        submoltType: typeof post.submolt,
+        hasBody: !!post.body,
+        bodyLength: post.body?.length || 0,
+      });
+    });
+    
+    // Start with all posts
+    let filteredPosts = [...feed.posts];
+    
+    // Filter posts by submolts (only if specified)
+    if (config.replySubmolts && config.replySubmolts.trim()) {
       const submolts = config.replySubmolts.split(',').map(s => s.trim().toLowerCase());
-      filteredPosts = filteredPosts.filter(post => 
-        submolts.includes(post.submolt?.toLowerCase())
-      );
-      console.log('[AI] Filtered by submolts:', filteredPosts.length, 'posts');
+      console.log('[AI] 🏷️ Filtering by submolts:', submolts);
+      
+      const beforeFilter = filteredPosts.length;
+      filteredPosts = filteredPosts.filter(post => {
+        // Handle both string and object submolt formats
+        let submoltName = '';
+        if (typeof post.submolt === 'string') {
+          submoltName = post.submolt.toLowerCase();
+        } else if (post.submolt && post.submolt.name) {
+          submoltName = post.submolt.name.toLowerCase();
+        }
+        
+        const matches = submolts.includes(submoltName);
+        if (matches) {
+          console.log('[AI] ✅ Submolt match:', submoltName, 'in post:', post.id);
+        }
+        return matches;
+      });
+      
+      console.log('[AI] Filtered by submolts:', filteredPosts.length, '/', beforeFilter, 'posts');
+      
+      if (filteredPosts.length === 0) {
+        console.log('[AI] 🔍 No posts match specified submolts. Available submolts in feed:');
+        const availableSubmolts = [...new Set(feed.posts.map(p => {
+          if (typeof p.submolt === 'string') return p.submolt;
+          if (p.submolt && p.submolt.name) return p.submolt.name;
+          return null;
+        }).filter(s => s))];
+        console.log('[AI] Available submolts:', availableSubmolts);
+        console.log('[AI] 💡 TIP: Update your submolt filter in AI Config to match available submolts');
+      }
+    } else {
+      console.log('[AI] 🏷️ No submolt filter specified - considering all submolts');
     }
     
-    // Filter posts by keywords
-    if (config.replyKeywords) {
+    // Filter posts by keywords (only if specified)
+    if (config.replyKeywords && config.replyKeywords.trim()) {
       const keywords = config.replyKeywords.split(',').map(k => k.trim().toLowerCase());
+      console.log('[AI] 🔍 Filtering by keywords:', keywords);
+      
+      const beforeFilter = filteredPosts.length;
       filteredPosts = filteredPosts.filter(post => {
-        const text = `${post.title} ${post.body}`.toLowerCase();
-        return keywords.some(keyword => text.includes(keyword));
+        const text = `${post.title || ''} ${post.body || ''}`.toLowerCase();
+        const matches = keywords.some(keyword => text.includes(keyword));
+        if (matches) {
+          console.log('[AI] ✅ Keyword match in post:', post.id, '-', post.title?.substring(0, 50));
+        }
+        return matches;
       });
-      console.log('[AI] Filtered by keywords:', filteredPosts.length, 'posts');
+      
+      console.log('[AI] Filtered by keywords:', filteredPosts.length, '/', beforeFilter, 'posts');
+      
+      if (filteredPosts.length === 0) {
+        console.log('[AI] 🔍 No posts match specified keywords');
+        console.log('[AI] 💡 TIP: Update your keyword filter in AI Config or remove it to reply to more posts');
+      }
+    } else {
+      console.log('[AI] 🔍 No keyword filter specified - considering all posts');
     }
     
     if (filteredPosts.length === 0) {
-      console.log('[AI] No posts match filters');
+      console.log('[AI] ❌ No posts match filters after filtering');
+      console.log('[AI] 💡 SUGGESTIONS:');
+      console.log('[AI] - Remove or update submolt filters in AI Config');
+      console.log('[AI] - Remove or update keyword filters in AI Config');
+      console.log('[AI] - Check if there are new posts in your feed');
       return;
     }
     
+    console.log('[AI] ✅ Found', filteredPosts.length, 'posts matching filters');
+    
     // Get posts we've already replied to
     const repliedPosts = store.get('agentRepliedPosts', []);
+    console.log('[AI] 📝 Already replied to', repliedPosts.length, 'posts');
     
     // Find posts we haven't replied to yet
     const newPosts = filteredPosts.filter(post => !repliedPosts.includes(post.id));
     
     if (newPosts.length === 0) {
-      console.log('[AI] No new posts to reply to');
+      console.log('[AI] ✅ No new posts to reply to (already replied to all matching posts)');
+      console.log('[AI] 📊 Stats: Total posts:', feed.posts.length, 'Filtered:', filteredPosts.length, 'Already replied:', repliedPosts.length);
       return;
     }
     
-    console.log('[AI] Found', newPosts.length, 'new posts to reply to');
+    console.log('[AI] 🎯 Found', newPosts.length, 'new posts to potentially reply to');
+    
+    // Check for rate limits before attempting to reply
+    const lastRateLimit = store.get('lastRateLimit');
+    if (lastRateLimit) {
+      const nextAllowedTime = new Date(lastRateLimit.nextAllowedTime);
+      const now = new Date();
+      
+      if (now < nextAllowedTime) {
+        const minutesLeft = Math.ceil((nextAllowedTime - now) / (1000 * 60));
+        console.log(`[AI] ⏱️ Rate limited. Next reply allowed in ${minutesLeft} minutes at ${nextAllowedTime.toLocaleTimeString()}`);
+        console.log(`[AI] 🚫 Skipping reply attempt to avoid spam`);
+        return;
+      } else {
+        // Rate limit expired, clear it
+        store.set('lastRateLimit', null);
+        console.log('[AI] ✅ Rate limit expired, can reply again');
+      }
+    }
+    
+    // Additional check: Don't reply too frequently (minimum 2 minutes between replies)
+    const lastReplyTime = store.get('agentLastReplyTime');
+    if (lastReplyTime) {
+      const timeSinceLastReply = Date.now() - new Date(lastReplyTime).getTime();
+      const minInterval = 2 * 60 * 1000; // 2 minutes
+      
+      if (timeSinceLastReply < minInterval) {
+        const waitMinutes = Math.ceil((minInterval - timeSinceLastReply) / (1000 * 60));
+        console.log(`[AI] ⏱️ Too soon since last reply. Wait ${waitMinutes} more minutes.`);
+        return;
+      }
+    }
     
     // Reply to first post (one at a time to avoid spam)
     const post = newPosts[0];
-    console.log('[AI] Generating reply for post:', post.id, '-', post.title);
+    console.log('[AI] 🎯 Attempting to reply to post:', {
+      id: post.id,
+      title: post.title?.substring(0, 100) + '...',
+      submolt: post.submolt,
+      bodyLength: post.body?.length || 0,
+    });
     
     // Generate reply
+    console.log('[AI] 🧠 Generating AI reply...');
     const replyResult = await generateAIReply(config, post);
     
     if (!replyResult.success) {
-      console.error('[AI] Failed to generate reply:', replyResult.error);
-      store.audit('ai.agent_reply_failed', { postId: post.id, error: replyResult.error });
+      console.error('[AI] ❌ Failed to generate reply:', replyResult.error);
+      console.error('[AI] 💡 This could be:');
+      console.error('[AI] - AI provider API key invalid');
+      console.error('[AI] - AI provider service down');
+      console.error('[AI] - Network connectivity issues');
+      console.error('[AI] - AI model not available');
+      store.audit('ai.agent_reply_failed', { postId: post.id, error: replyResult.error, stage: 'generation' });
       return;
     }
     
-    // Post reply
-    await postMoltbookReply(apiKey, post.id, replyResult.reply);
+    console.log('[AI] ✅ AI reply generated successfully');
+    console.log('[AI] 📝 Reply preview:', replyResult.reply.substring(0, 150) + '...');
     
-    // Track replied post
+    // Post reply
+    console.log('[AI] 📤 Posting reply to Moltbook...');
+    const postResult = await postMoltbookReply(apiKey, post.id, replyResult.reply);
+    
+    if (!postResult.success) {
+      console.error('[AI] ❌ Failed to post reply:', postResult.error);
+      console.error('[AI] 💡 This could be:');
+      console.error('[AI] - Agent not properly claimed on Moltbook');
+      console.error('[AI] - API key lacks posting permissions');
+      console.error('[AI] - Moltbook server issues');
+      console.error('[AI] - Rate limit hit');
+      console.error('[AI] - Network connectivity issues');
+      
+      // Check if it's a rate limit error and store it
+      if (postResult.error && (postResult.error.includes('30 minutes') || postResult.error.includes('rate limit'))) {
+        console.log('[AI] ⏱️ Hit rate limit, storing for future reference');
+        const rateLimitInfo = {
+          timestamp: new Date().toISOString(),
+          retryAfter: 30, // 30 minutes default
+          nextAllowedTime: new Date(Date.now() + 30 * 60 * 1000).toISOString()
+        };
+        store.set('lastRateLimit', rateLimitInfo);
+      }
+      
+      store.audit('ai.agent_reply_failed', { postId: post.id, error: postResult.error, stage: 'posting' });
+      return;
+    }
+    
+    // SUCCESS! Track replied post
     repliedPosts.push(post.id);
     store.set('agentRepliedPosts', repliedPosts);
+    
+    // Store last reply time to prevent spam
+    store.set('agentLastReplyTime', new Date().toISOString());
     
     // Increment counters
     agentRepliesThisHour++;
     const repliesToday = store.get('agentRepliesToday', 0);
     store.set('agentRepliesToday', repliesToday + 1);
     
-    console.log('[AI] Successfully replied to post:', post.id);
+    console.log('[AI] ========================================');
+    console.log('[AI] 🎉 SUCCESS! Reply posted successfully');
+    console.log('[AI] 📊 Stats:', {
+      postId: post.id,
+      postTitle: post.title?.substring(0, 50) + '...',
+      replyLength: replyResult.reply.length,
+      repliesThisHour: agentRepliesThisHour,
+      repliesToday: repliesToday + 1,
+    });
+    console.log('[AI] ========================================');
+    
     store.audit('ai.agent_replied', { 
       postId: post.id, 
       postTitle: post.title,
@@ -3300,12 +4313,25 @@ async function runAgentLoop() {
       mainWindow.webContents.send('agent-status-update', {
         lastCheck: new Date().toISOString(),
         repliesToday: repliesToday + 1,
+        lastReply: {
+          postId: post.id,
+          postTitle: post.title,
+          timestamp: new Date().toISOString(),
+        }
       });
     }
     
   } catch (error) {
-    console.error('[AI] Agent loop error:', error);
-    store.audit('ai.agent_error', { error: error.message });
+    console.error('[AI] ========================================');
+    console.error('[AI] ❌ AGENT LOOP ERROR:', error.message);
+    console.error('[AI] 🔍 Error details:', error);
+    console.error('[AI] 💡 This could be:');
+    console.error('[AI] - Network connectivity issues');
+    console.error('[AI] - Moltbook server problems');
+    console.error('[AI] - Configuration issues');
+    console.error('[AI] - Code bugs (please report)');
+    console.error('[AI] ========================================');
+    store.audit('ai.agent_error', { error: error.message, stack: error.stack });
   }
 }
 

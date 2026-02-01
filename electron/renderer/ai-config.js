@@ -95,28 +95,48 @@ async function loadAIConfig() {
     
     // AI Provider settings
     if (config.aiProvider) {
-      document.getElementById('aiProvider').value = config.aiProvider;
-      updateModelOptions(config.aiProvider);
-      
-      // Show/hide API key for Ollama
-      const apiKeyGroup = document.getElementById('aiApiKey').parentElement;
-      if (config.aiProvider === 'ollama') {
-        apiKeyGroup.style.display = 'none';
-      } else {
-        apiKeyGroup.style.display = 'block';
+      const providerSelect = document.getElementById('aiProvider');
+      if (providerSelect) {
+        providerSelect.value = config.aiProvider;
+        
+        // Show/hide API key for Ollama
+        const apiKeyGroup = document.getElementById('aiApiKey').parentElement;
+        if (apiKeyGroup) {
+          if (config.aiProvider === 'ollama') {
+            apiKeyGroup.style.display = 'none';
+          } else {
+            apiKeyGroup.style.display = 'block';
+          }
+        }
+        
+        // Update model options and wait for them to load
+        await updateModelOptions(config.aiProvider);
+        
+        // Set the model after options are loaded
+        if (config.aiModel) {
+          setTimeout(() => {
+            const modelSelect = document.getElementById('aiModel');
+            if (modelSelect) {
+              modelSelect.value = config.aiModel;
+              console.log('[AI] Model set to:', config.aiModel);
+            }
+          }, 200);
+        }
       }
     }
+    
     if (config.aiApiKey) {
-      document.getElementById('aiApiKey').value = config.aiApiKey;
+      const apiKeyInput = document.getElementById('aiApiKey');
+      if (apiKeyInput) {
+        apiKeyInput.value = config.aiApiKey;
+      }
     }
-    if (config.aiModel) {
-      // Wait a bit for model options to load
-      setTimeout(() => {
-        document.getElementById('aiModel').value = config.aiModel;
-      }, 100);
-    }
+    
     if (config.customEndpoint) {
-      document.getElementById('customEndpoint').value = config.customEndpoint;
+      const customEndpointInput = document.getElementById('customEndpoint');
+      if (customEndpointInput) {
+        customEndpointInput.value = config.customEndpoint;
+      }
     }
     
     // Auto-reply settings - CRITICAL: Use strict boolean check
@@ -125,18 +145,41 @@ async function loadAIConfig() {
       autoReplyCheckbox.checked = config.autoReplyEnabled === true;
       console.log('[AI] Auto-reply checkbox set to:', autoReplyCheckbox.checked);
     }
-    document.getElementById('checkInterval').value = config.checkInterval || 5;
-    document.getElementById('replySubmolts').value = config.replySubmolts || '';
-    document.getElementById('replyKeywords').value = config.replyKeywords || '';
-    document.getElementById('maxRepliesPerHour').value = config.maxRepliesPerHour || 10;
+    
+    // Load other settings
+    const checkIntervalInput = document.getElementById('checkInterval');
+    if (checkIntervalInput) checkIntervalInput.value = config.checkInterval || 5;
+    
+    const replySubmoltsInput = document.getElementById('replySubmolts');
+    if (replySubmoltsInput) replySubmoltsInput.value = config.replySubmolts || '';
+    
+    const replyKeywordsInput = document.getElementById('replyKeywords');
+    if (replyKeywordsInput) replyKeywordsInput.value = config.replyKeywords || '';
+    
+    const maxRepliesInput = document.getElementById('maxRepliesPerHour');
+    if (maxRepliesInput) maxRepliesInput.value = config.maxRepliesPerHour || 10;
     
     // Advanced settings
-    document.getElementById('responseLength').value = config.responseLength || 'medium';
-    document.getElementById('responseStyle').value = config.responseStyle || 'friendly';
-    document.getElementById('temperature').value = (config.temperature || 0.7) * 10;
-    document.getElementById('temperatureValue').textContent = (config.temperature || 0.7).toFixed(1);
-    document.getElementById('usePersona').checked = config.usePersona !== false; // Default true
-    document.getElementById('avoidRepetition').checked = config.avoidRepetition !== false; // Default true
+    const responseLengthSelect = document.getElementById('responseLength');
+    if (responseLengthSelect) responseLengthSelect.value = config.responseLength || 'medium';
+    
+    const responseStyleSelect = document.getElementById('responseStyle');
+    if (responseStyleSelect) responseStyleSelect.value = config.responseStyle || 'friendly';
+    
+    const temperatureSlider = document.getElementById('temperature');
+    if (temperatureSlider) {
+      temperatureSlider.value = (config.temperature || 0.7) * 10;
+      const temperatureValue = document.getElementById('temperatureValue');
+      if (temperatureValue) {
+        temperatureValue.textContent = (config.temperature || 0.7).toFixed(1);
+      }
+    }
+    
+    const usePersonaCheckbox = document.getElementById('usePersona');
+    if (usePersonaCheckbox) usePersonaCheckbox.checked = config.usePersona !== false;
+    
+    const avoidRepetitionCheckbox = document.getElementById('avoidRepetition');
+    if (avoidRepetitionCheckbox) avoidRepetitionCheckbox.checked = config.avoidRepetition !== false;
     
     // Sync agent running state from backend
     agentRunning = config.agentRunning || false;
@@ -151,21 +194,35 @@ async function loadAIConfig() {
 // Setup event listeners
 function setupAIEventListeners() {
   // AI Provider change
-  document.getElementById('aiProvider').onchange = (e) => {
+  document.getElementById('aiProvider').onchange = async (e) => {
     const provider = e.target.value;
-    updateModelOptions(provider);
+    console.log('[AI] Provider changed to:', provider);
     
     // Show/hide custom endpoint
     const customGroup = document.getElementById('customEndpointGroup');
-    customGroup.style.display = provider === 'custom' ? 'block' : 'none';
+    if (customGroup) {
+      customGroup.style.display = provider === 'custom' ? 'block' : 'none';
+    }
     
     // Show/hide API key field for Ollama
     const apiKeyGroup = document.getElementById('aiApiKey').parentElement;
-    if (provider === 'ollama') {
-      apiKeyGroup.style.display = 'none';
-    } else {
-      apiKeyGroup.style.display = 'block';
+    if (apiKeyGroup) {
+      if (provider === 'ollama') {
+        apiKeyGroup.style.display = 'none';
+      } else {
+        apiKeyGroup.style.display = 'block';
+      }
     }
+    
+    // Update model options - CRITICAL: Wait for completion
+    if (provider) {
+      console.log('[AI] Updating model options for:', provider);
+      await updateModelOptions(provider);
+      console.log('[AI] Model options update completed');
+    }
+    
+    // Update agent status display after model options are loaded
+    setTimeout(updateAgentStatus, 300);
   };
   
   // Test AI connection
@@ -210,48 +267,92 @@ function setupAIEventListeners() {
 }
 
 // Update model options based on provider
-function updateModelOptions(provider) {
+async function updateModelOptions(provider) {
   const modelSelect = document.getElementById('aiModel');
   const modelGroup = document.getElementById('aiModelGroup');
   
+  console.log('[AI] Updating model options for provider:', provider);
+  
   if (!provider || provider === 'custom') {
-    modelGroup.style.display = 'none';
+    if (modelGroup) modelGroup.style.display = 'none';
     return;
   }
   
-  modelGroup.style.display = 'block';
+  if (modelGroup) modelGroup.style.display = 'block';
+  
+  if (!modelSelect) {
+    console.error('[AI] Model select element not found');
+    return;
+  }
+  
   const config = AI_PROVIDERS[provider];
   
-  modelSelect.innerHTML = '<option value="">-- Select Model --</option>';
+  if (!config) {
+    console.error('[AI] Unknown provider:', provider);
+    modelSelect.innerHTML = '<option value="">-- Provider not found --</option>';
+    return;
+  }
   
-  // For Ollama, show installed models
-  if (provider === 'ollama') {
-    if (config.models.length === 0) {
-      const note = document.createElement('option');
-      note.disabled = true;
-      note.textContent = '--- No models found. Run: ollama pull llama3.2 ---';
-      modelSelect.appendChild(note);
+  // Clear existing options and show loading
+  modelSelect.innerHTML = '<option value="">-- Loading models... --</option>';
+  
+  try {
+    // For Ollama, reload models dynamically
+    if (provider === 'ollama') {
+      console.log('[AI] Loading Ollama models dynamically...');
+      const result = await window.electronAPI.getOllamaModels();
+      if (result.success && result.models && result.models.length > 0) {
+        AI_PROVIDERS.ollama.models = result.models;
+        console.log('[AI] Updated Ollama models:', result.models);
+      } else {
+        console.log('[AI] No Ollama models found, using defaults');
+        AI_PROVIDERS.ollama.models = ['llama3.2', 'llama3.1', 'mistral', 'phi3', 'gemma2', 'qwen2.5'];
+      }
+    }
+    
+    // Clear and rebuild options
+    modelSelect.innerHTML = '<option value="">-- Select Model --</option>';
+    
+    // Get current models for the provider
+    const models = AI_PROVIDERS[provider].models || [];
+    
+    if (models.length === 0) {
+      const option = document.createElement('option');
+      option.disabled = true;
+      option.textContent = provider === 'ollama' ? 
+        '--- No models found. Run: ollama pull llama3.2 ---' : 
+        '--- No models available ---';
+      modelSelect.appendChild(option);
     } else {
-      const note = document.createElement('option');
-      note.disabled = true;
-      note.textContent = `--- ${config.models.length} Installed Models ---`;
-      modelSelect.appendChild(note);
+      // Add section header for Ollama
+      if (provider === 'ollama') {
+        const note = document.createElement('option');
+        note.disabled = true;
+        note.textContent = `--- ${models.length} Installed Models ---`;
+        modelSelect.appendChild(note);
+      }
       
-      config.models.forEach(model => {
+      // Add all models
+      models.forEach(model => {
         const option = document.createElement('option');
         option.value = model;
         option.textContent = model;
         modelSelect.appendChild(option);
+        console.log('[AI] Added model:', model);
       });
     }
-  } else {
-    // For other providers, show available models
-    config.models.forEach(model => {
-      const option = document.createElement('option');
-      option.value = model;
-      option.textContent = model;
-      modelSelect.appendChild(option);
-    });
+    
+    console.log('[AI] Model options updated successfully, total options:', modelSelect.options.length);
+    
+    // Trigger change event to update any dependent UI
+    modelSelect.dispatchEvent(new Event('change'));
+    
+    // Update agent status after model options are loaded
+    setTimeout(updateAgentStatus, 200);
+    
+  } catch (error) {
+    console.error('[AI] Error updating model options:', error);
+    modelSelect.innerHTML = '<option value="">-- Error loading models --</option>';
   }
 }
 
@@ -727,127 +828,82 @@ async function debugAndFixIssues() {
   showAIStatus('🔧 Running diagnostic and attempting automatic fixes...', 'info');
   
   try {
-    console.log('[Debug] ========================================');
-    console.log('[Debug] 🔧 AUTOMATIC ISSUE DIAGNOSIS & FIXING');
-    console.log('[Debug] ========================================');
+    console.log('[Debug] Calling backend debug function...');
+    const result = await window.electronAPI.debugAgentIssues();
     
-    let fixesApplied = [];
-    let issuesFound = [];
-    
-    // Step 1: Test current connection
-    console.log('[Debug] 1️⃣ Testing current connection...');
-    const testResult = await window.electronAPI.testMoltbookConnection();
-    
-    if (!testResult.success) {
-      issuesFound.push('Connection test failed');
-      showAIStatus('❌ Connection test failed: ' + testResult.error, 'error');
-      return;
-    }
-    
-    const { results } = testResult;
-    
-    // Step 2: Check API key format
-    if (!results.apiKeyFormat?.valid) {
-      issuesFound.push('Invalid API key format');
-      console.log('[Debug] ❌ API key format invalid - need to re-register');
+    if (result.success) {
+      const { issuesFound, fixesApplied, recommendations } = result;
       
-      // Offer to reset and re-register
-      if (confirm('API key appears to be corrupted. Reset agent and re-register?')) {
-        console.log('[Debug] 🔄 Resetting agent...');
-        const resetResult = await window.electronAPI.moltbookResetAgent();
-        if (resetResult.success) {
-          fixesApplied.push('Reset corrupted agent');
-          showAIStatus('✅ Agent reset. Please go to Settings to re-register.', 'success');
-          return;
+      console.log('=== AGENT DIAGNOSTIC RESULTS ===');
+      console.log('Issues Found:', issuesFound);
+      console.log('Fixes Applied:', fixesApplied);
+      console.log('Recommendations:', recommendations);
+      console.log('=== END DIAGNOSTIC RESULTS ===');
+      
+      // Show detailed summary
+      let message = '🔧 Agent Diagnostic Complete!\n\n';
+      
+      if (issuesFound.length === 0) {
+        message += '✅ No issues found! Your agent should be working properly.\n\n';
+        message += 'If you\'re still having problems:\n';
+        message += '1. Check the console logs for errors\n';
+        message += '2. Try the "Test Agent Loop" button\n';
+        message += '3. Restart the application';
+      } else {
+        message += `❌ Found ${issuesFound.length} issue(s):\n`;
+        issuesFound.forEach((issue, i) => {
+          message += `${i + 1}. ${issue}\n`;
+        });
+        
+        if (fixesApplied.length > 0) {
+          message += `\n✅ Applied ${fixesApplied.length} fix(es):\n`;
+          fixesApplied.forEach((fix, i) => {
+            message += `${i + 1}. ${fix}\n`;
+          });
+        }
+        
+        if (recommendations.length > 0) {
+          message += '\n💡 Recommendations:\n';
+          recommendations.forEach((rec, i) => {
+            message += `${i + 1}. ${rec}\n`;
+          });
+        }
+        
+        if (fixesApplied.length > 0) {
+          message += '\nPlease test your agent again!';
         }
       }
-    }
-    
-    // Step 3: Check agent status
-    if (!results.agentStatus?.success || results.agentStatus?.status !== 'active') {
-      issuesFound.push('Agent not active');
-      console.log('[Debug] ❌ Agent not active - status:', results.agentStatus?.status);
       
-      if (results.agentStatus?.status === 'error') {
-        if (confirm('Agent claim not completed. Open Moltbook website to complete claim?')) {
-          // Get claim URL from agent data
-          const agentResult = await window.electronAPI.moltbookGetAgent();
-          if (agentResult.success && agentResult.agent?.claimUrl) {
-            window.electronAPI.openExternal(agentResult.agent.claimUrl);
-            fixesApplied.push('Opened claim URL');
-          } else {
-            window.electronAPI.openExternal('https://www.moltbook.com/agents');
-            fixesApplied.push('Opened Moltbook agents page');
-          }
-        }
-      }
-    }
-    
-    // Step 4: Check permissions
-    if (!results.agentPosts?.canPost) {
-      issuesFound.push('API key lacks posting permissions');
-      console.log('[Debug] ❌ API key lacks posting permissions');
+      // Determine status type
+      const statusType = issuesFound.length === 0 ? 'success' : 
+                        fixesApplied.length > 0 ? 'warning' : 'error';
       
-      if (confirm('API key lacks permissions. This usually means claim not completed. Open Moltbook website?')) {
-        window.electronAPI.openExternal('https://www.moltbook.com/agents');
-        fixesApplied.push('Opened Moltbook agents page for claim completion');
-      }
-    }
-    
-    // Step 5: Check Safe Mode
-    if (results.safeMode) {
-      issuesFound.push('Safe Mode is blocking posts');
-      console.log('[Debug] ⚠️ Safe Mode is enabled');
+      showAIStatus(message, statusType);
       
-      if (confirm('Safe Mode is enabled and blocking posts. Disable Safe Mode?')) {
-        const configResult = await window.electronAPI.saveConfig({ safeMode: false });
-        if (configResult.success) {
-          fixesApplied.push('Disabled Safe Mode');
-          console.log('[Debug] ✅ Safe Mode disabled');
-        }
+      // Show notification
+      if (window.showNotification) {
+        window.showNotification(`Diagnostic complete! Found ${issuesFound.length} issues, applied ${fixesApplied.length} fixes.`, 'info');
       }
-    }
-    
-    // Step 6: Check auto-reply settings
-    const config = await window.electronAPI.getConfig();
-    if (!config.autoReplyEnabled) {
-      issuesFound.push('Auto-reply not enabled');
-      console.log('[Debug] ⚠️ Auto-reply not enabled');
       
-      if (confirm('Auto-reply is not enabled. Enable it now?')) {
-        const autoReplyResult = await window.electronAPI.saveConfig({ autoReplyEnabled: true });
-        if (autoReplyResult.success) {
-          fixesApplied.push('Enabled auto-reply');
-          console.log('[Debug] ✅ Auto-reply enabled');
-          
-          // Update the checkbox
-          const checkbox = document.getElementById('autoReplyEnabled');
-          if (checkbox) {
-            checkbox.checked = true;
-          }
-        }
-      }
+      // Update agent status display
+      updateAgentStatus();
+      
+    } else {
+      showAIStatus('❌ Diagnostic failed: ' + result.error, 'error');
+      console.error('[Debug] Diagnostic error:', result.error);
     }
     
-    // Step 7: Try to refresh skill.md knowledge
-    console.log('[Debug] 7️⃣ Refreshing skill.md knowledge...');
-    try {
-      const skillResult = await window.electronAPI.moltbookFetchSkillDoc();
-      if (skillResult.success) {
-        fixesApplied.push('Refreshed skill.md knowledge');
-        console.log('[Debug] ✅ skill.md refreshed');
-      }
-    } catch (error) {
-      console.log('[Debug] ⚠️ Could not refresh skill.md:', error.message);
-    }
-    
-    // Summary
-    console.log('[Debug] ========================================');
-    console.log('[Debug] 🔧 DIAGNOSIS COMPLETE');
-    console.log('[Debug] Issues Found:', issuesFound);
-    console.log('[Debug] Fixes Applied:', fixesApplied);
-    console.log('[Debug] ========================================');
-    
+  } catch (error) {
+    showAIStatus('❌ Diagnostic failed: ' + error.message, 'error');
+    console.error('[Debug] ❌ Diagnostic exception:', error);
+  }
+}
+
+// Export module functions
+window.aiConfigModule = {
+  initAIConfig,
+  updateModelOptions,
+};
     let summaryMessage = '🔧 Diagnostic Complete!\n\n';
     
     if (issuesFound.length === 0) {
@@ -881,11 +937,6 @@ async function debugAndFixIssues() {
       window.showNotification(`Diagnostic complete! Found ${issuesFound.length} issues, applied ${fixesApplied.length} fixes.`, 'info');
     }
     
-  } catch (error) {
-    showAIStatus('❌ Diagnostic failed: ' + error.message, 'error');
-    console.error('[Debug] ❌ Diagnostic error:', error);
-  }
-}
 
 // Send manual reply to specific post URL
 async function sendManualReply() {
@@ -1206,3 +1257,10 @@ if (window.electronAPI && window.electronAPI.onAgentStatusUpdate) {
     }
   });
 }
+
+
+// Export module functions
+window.aiConfigModule = {
+  initAIConfig,
+  updateModelOptions,
+};

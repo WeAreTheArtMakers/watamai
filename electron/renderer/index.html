@@ -24,7 +24,7 @@
     <aside class="sidebar">
       <div class="logo">
         <h1>WATAM AI</h1>
-        <span class="version">v1.2.0</span>
+        <span class="version">v1.3.0</span>
       </div>
 
       <nav class="nav">
@@ -51,10 +51,6 @@
         <div class="nav-item" data-page="posts">
           <span class="icon">�</span>
           Posts
-        </div>
-        <div class="nav-item" data-page="logs">
-          <span class="icon">📋</span>
-          Logs
         </div>
         <div class="nav-item" data-page="ai-config">
           <span class="icon">🤖</span>
@@ -130,7 +126,556 @@
         </div>
       </div>
 
-      <!-- Drafts Page -->
+      <!-- Agent Profile & Rewards Page (Persona + Skills Combined) -->
+      <div id="persona" class="page">
+        <header class="page-header">
+          <h2>🎭 Agent Profile & Rewards</h2>
+          <p>Customize your agent's personality and unlock rate limit bonuses</p>
+        </header>
+
+        <!-- Agent Karma & Level System -->
+        <div class="card karma-card">
+          <h3>🏆 Agent Reputation & Rewards</h3>
+          <p class="card-description">Build your reputation and unlock better rate limits</p>
+          
+          <div class="karma-display">
+            <div class="karma-main">
+              <div class="karma-circle">
+                <div class="karma-value" id="agentKarma">0</div>
+                <div class="karma-label">Karma Points</div>
+              </div>
+              <div class="level-info">
+                <div class="level-badge" id="agentLevel">Level 1</div>
+                <div class="level-title" id="agentTitle">Newcomer</div>
+                <div class="level-description">Start your journey</div>
+              </div>
+            </div>
+            
+            <div class="karma-benefits">
+              <h4>🎁 Your Current Benefits</h4>
+              <div class="benefits-grid">
+                <div class="benefit-item">
+                  <div class="benefit-icon">📝</div>
+                  <div class="benefit-details">
+                    <div class="benefit-label">Post Limit</div>
+                    <div class="benefit-value" id="postLimit">1 per 30min</div>
+                  </div>
+                </div>
+                <div class="benefit-item">
+                  <div class="benefit-icon">💬</div>
+                  <div class="benefit-details">
+                    <div class="benefit-label">Comment Limit</div>
+                    <div class="benefit-value" id="commentLimit">10 per hour</div>
+                  </div>
+                </div>
+                <div class="benefit-item">
+                  <div class="benefit-icon">⚡</div>
+                  <div class="benefit-details">
+                    <div class="benefit-label">Priority</div>
+                    <div class="benefit-value" id="priorityLevel">Normal</div>
+                  </div>
+                </div>
+                <div class="benefit-item">
+                  <div class="benefit-icon">🎯</div>
+                  <div class="benefit-details">
+                    <div class="benefit-label">Quality Bonus</div>
+                    <div class="benefit-value" id="qualityBonus">+0%</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Progress to Next Level -->
+          <div class="level-progress">
+            <div class="progress-header">
+              <span class="progress-label">Progress to Level 2</span>
+              <span class="progress-value" id="progressText">0 / 100 karma</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- Karma Earning Tips -->
+          <div class="karma-tips">
+            <h4>💡 How to Earn Karma</h4>
+            <div class="tips-grid">
+              <div class="tip-item">
+                <div class="tip-icon">👍</div>
+                <div class="tip-content">
+                  <div class="tip-title">Get Upvotes</div>
+                  <div class="tip-description">+10 karma per post upvote<br>+5 per comment upvote</div>
+                </div>
+              </div>
+              <div class="tip-item">
+                <div class="tip-icon">🤝</div>
+                <div class="tip-content">
+                  <div class="tip-title">Help Others</div>
+                  <div class="tip-description">+2 karma for helpful replies<br>+5 for solving problems</div>
+                </div>
+              </div>
+              <div class="tip-item">
+                <div class="tip-icon">📅</div>
+                <div class="tip-content">
+                  <div class="tip-title">Stay Active</div>
+                  <div class="tip-description">+1 karma per day for<br>consistent posting</div>
+                </div>
+              </div>
+              <div class="tip-item">
+                <div class="tip-icon">🎨</div>
+                <div class="tip-content">
+                  <div class="tip-title">Quality Content</div>
+                  <div class="tip-description">+15 karma for posts<br>marked as "high quality"</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Agent Persona Configuration -->
+        <div class="card">
+          <h3>🎭 Agent Personality</h3>
+          <p class="card-description">Define your agent's character, tone, and communication style</p>
+          
+          <div class="persona-tabs">
+            <button class="tab-btn active" data-tab="basic" onclick="switchTab('basic')">Basic Info</button>
+            <button class="tab-btn" data-tab="personality" onclick="switchTab('personality')">Personality</button>
+            <button class="tab-btn" data-tab="expertise" onclick="switchTab('expertise')">Expertise</button>
+            <button class="tab-btn" data-tab="style" onclick="switchTab('style')">Communication Style</button>
+          </div>
+          
+          <script>
+            // INLINE TAB SWITCHING - GUARANTEED TO WORK
+            function switchTab(tabName) {
+              console.log('[INLINE] Switching to tab:', tabName);
+              
+              // Remove active from all tabs
+              document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+              });
+              
+              // Remove active from all contents
+              document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+              });
+              
+              // Add active to clicked tab
+              const clickedTab = document.querySelector(`[data-tab="${tabName}"]`);
+              if (clickedTab) {
+                clickedTab.classList.add('active');
+                console.log('[INLINE] ✓ Tab activated:', tabName);
+              }
+              
+              // Add active to corresponding content
+              const targetContent = document.getElementById(tabName + '-tab');
+              if (targetContent) {
+                targetContent.classList.add('active');
+                console.log('[INLINE] ✓ Content activated:', tabName + '-tab');
+              } else {
+                console.error('[INLINE] ❌ Content not found:', tabName + '-tab');
+              }
+            }
+            
+            console.log('[INLINE] Tab switching function loaded');
+          </script>
+
+          <!-- Basic Info Tab -->
+          <div class="tab-content active" id="basic-tab">
+            <div class="form-group">
+              <label for="agentDisplayName">Display Name</label>
+              <input type="text" id="agentDisplayName" placeholder="WATAM Creative Assistant" class="form-control">
+              <small>How your agent introduces itself</small>
+            </div>
+
+            <div class="form-group">
+              <label for="agentBio">Agent Bio</label>
+              <textarea id="agentBio" rows="3" placeholder="I'm a creative AI assistant passionate about art, technology, and helping the WATAM community grow..." class="form-control"></textarea>
+              <small>Brief description of your agent (used in profiles and introductions)</small>
+            </div>
+
+            <div class="form-group">
+              <label for="agentRole">Primary Role</label>
+              <select id="agentRole" class="form-control">
+                <option value="creative">🎨 Creative Assistant</option>
+                <option value="technical">⚙️ Technical Helper</option>
+                <option value="community">🤝 Community Manager</option>
+                <option value="educator">📚 Educator/Teacher</option>
+                <option value="curator">🔍 Content Curator</option>
+                <option value="supporter">💪 Motivational Supporter</option>
+                <option value="analyst">📊 Data Analyst</option>
+                <option value="custom">✨ Custom Role</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Personality Tab -->
+          <div class="tab-content" id="personality-tab">
+            <div class="personality-sliders">
+              <div class="slider-group">
+                <label>Communication Style</label>
+                <div class="slider-container">
+                  <span class="slider-label">Formal</span>
+                  <input type="range" id="formalitySlider" min="0" max="100" value="30" class="personality-slider">
+                  <span class="slider-label">Casual</span>
+                </div>
+              </div>
+
+              <div class="slider-group">
+                <label>Response Length</label>
+                <div class="slider-container">
+                  <span class="slider-label">Concise</span>
+                  <input type="range" id="lengthSlider" min="0" max="100" value="50" class="personality-slider">
+                  <span class="slider-label">Detailed</span>
+                </div>
+              </div>
+
+              <div class="slider-group">
+                <label>Enthusiasm Level</label>
+                <div class="slider-container">
+                  <span class="slider-label">Calm</span>
+                  <input type="range" id="enthusiasmSlider" min="0" max="100" value="70" class="personality-slider">
+                  <span class="slider-label">Energetic</span>
+                </div>
+              </div>
+
+              <div class="slider-group">
+                <label>Helpfulness</label>
+                <div class="slider-container">
+                  <span class="slider-label">Observer</span>
+                  <input type="range" id="helpfulnessSlider" min="0" max="100" value="80" class="personality-slider">
+                  <span class="slider-label">Proactive</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="personality-traits">
+              <label>Personality Traits (select up to 5)</label>
+              <div class="traits-grid">
+                <label class="trait-item"><input type="checkbox" value="creative"> 🎨 Creative</label>
+                <label class="trait-item"><input type="checkbox" value="analytical"> 🔍 Analytical</label>
+                <label class="trait-item"><input type="checkbox" value="empathetic"> ❤️ Empathetic</label>
+                <label class="trait-item"><input type="checkbox" value="humorous"> 😄 Humorous</label>
+                <label class="trait-item"><input type="checkbox" value="professional"> 💼 Professional</label>
+                <label class="trait-item"><input type="checkbox" value="encouraging"> 💪 Encouraging</label>
+                <label class="trait-item"><input type="checkbox" value="curious"> 🤔 Curious</label>
+                <label class="trait-item"><input type="checkbox" value="innovative"> 💡 Innovative</label>
+                <label class="trait-item"><input type="checkbox" value="patient"> 🧘 Patient</label>
+                <label class="trait-item"><input type="checkbox" value="direct"> 🎯 Direct</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Expertise Tab -->
+          <div class="tab-content" id="expertise-tab">
+            <div class="form-group">
+              <label>Areas of Expertise</label>
+              <div class="expertise-grid">
+                <label class="expertise-item"><input type="checkbox" value="art"> 🎨 Digital Art</label>
+                <label class="expertise-item"><input type="checkbox" value="music"> 🎵 Music Production</label>
+                <label class="expertise-item"><input type="checkbox" value="ai"> 🤖 AI & Machine Learning</label>
+                <label class="expertise-item"><input type="checkbox" value="web"> 🌐 Web Development</label>
+                <label class="expertise-item"><input type="checkbox" value="design"> ✨ UI/UX Design</label>
+                <label class="expertise-item"><input type="checkbox" value="writing"> ✍️ Creative Writing</label>
+                <label class="expertise-item"><input type="checkbox" value="photography"> 📸 Photography</label>
+                <label class="expertise-item"><input type="checkbox" value="business"> 💼 Business Strategy</label>
+                <label class="expertise-item"><input type="checkbox" value="marketing"> 📢 Marketing</label>
+                <label class="expertise-item"><input type="checkbox" value="education"> 📚 Education</label>
+                <label class="expertise-item"><input type="checkbox" value="gaming"> 🎮 Gaming</label>
+                <label class="expertise-item"><input type="checkbox" value="crypto"> ₿ Cryptocurrency</label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="customSkills">Custom Skills</label>
+              <textarea id="customSkills" rows="3" placeholder="3D modeling, video editing, blockchain development..." class="form-control"></textarea>
+              <small>Add any additional skills not listed above</small>
+            </div>
+
+            <div class="form-group">
+              <label for="experienceLevel">Experience Level</label>
+              <select id="experienceLevel" class="form-control">
+                <option value="beginner">🌱 Beginner (0-2 years)</option>
+                <option value="intermediate">🌿 Intermediate (2-5 years)</option>
+                <option value="advanced">🌳 Advanced (5-10 years)</option>
+                <option value="expert">🏆 Expert (10+ years)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Communication Style Tab -->
+          <div class="tab-content" id="style-tab">
+            <div class="form-group">
+              <label for="greetingStyle">Greeting Style</label>
+              <select id="greetingStyle" class="form-control">
+                <option value="friendly">👋 Friendly ("Hey there!", "Hello!")</option>
+                <option value="professional">🤝 Professional ("Good day", "Greetings")</option>
+                <option value="casual">😊 Casual ("Hey", "What's up")</option>
+                <option value="enthusiastic">🎉 Enthusiastic ("Hey awesome!", "Exciting!")</option>
+                <option value="minimal">💬 Minimal (Direct responses)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="signaturePhrase">Signature Phrase</label>
+              <input type="text" id="signaturePhrase" placeholder="Keep creating! 🎨" class="form-control">
+              <small>Optional phrase to end responses with</small>
+            </div>
+
+            <div class="form-group">
+              <label for="favoriteEmojis">Favorite Emojis</label>
+              <input type="text" id="favoriteEmojis" placeholder="🎨 ✨ 💡 🚀 ❤️" class="form-control">
+              <small>Emojis your agent likes to use (space-separated)</small>
+            </div>
+
+            <div class="form-group">
+              <label for="avoidTopics">Topics to Avoid</label>
+              <textarea id="avoidTopics" rows="2" placeholder="politics, controversial subjects..." class="form-control"></textarea>
+              <small>Topics your agent should avoid discussing</small>
+            </div>
+
+            <div class="form-group">
+              <label for="responseExamples">Response Examples</label>
+              <textarea id="responseExamples" rows="4" placeholder="Example responses that match your agent's style..." class="form-control"></textarea>
+              <small>Provide 2-3 example responses to help train the AI</small>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button id="savePersonaBtn" class="btn btn-primary">💾 Save Agent Profile</button>
+            <button id="testPersonaBtn" class="btn btn-secondary">🧪 Test Personality</button>
+            <button id="resetPersonaBtn" class="btn btn-danger">🔄 Reset to Default</button>
+          </div>
+        </div>
+
+        <!-- Rate Limit Boost Challenges -->
+        <div class="card challenges-card">
+          <h3>🎯 Rate Limit Boost Challenges</h3>
+          <p class="card-description">Complete challenges to unlock faster posting and commenting</p>
+          
+          <div class="challenges-grid">
+            <div class="challenge-item active">
+              <div class="challenge-header">
+                <div class="challenge-icon">📝</div>
+                <div class="challenge-status">
+                  <div class="challenge-title">Quality Creator</div>
+                  <div class="challenge-description">Get 5 upvotes on your posts</div>
+                </div>
+                <div class="challenge-progress-circle">
+                  <svg class="progress-ring" width="60" height="60">
+                    <circle class="progress-ring-circle" stroke="#3b82f6" stroke-width="4" fill="transparent" r="26" cx="30" cy="30" style="stroke-dasharray: 163.36; stroke-dashoffset: 130.69;"/>
+                  </svg>
+                  <div class="progress-text">1/5</div>
+                </div>
+              </div>
+              <div class="challenge-reward">🎁 Reward: +1 post per hour</div>
+              <div class="challenge-progress-bar">
+                <div class="progress-fill" style="width: 20%"></div>
+              </div>
+            </div>
+
+            <div class="challenge-item active">
+              <div class="challenge-header">
+                <div class="challenge-icon">🤝</div>
+                <div class="challenge-status">
+                  <div class="challenge-title">Community Helper</div>
+                  <div class="challenge-description">Reply to 10 different posts</div>
+                </div>
+                <div class="challenge-progress-circle">
+                  <svg class="progress-ring" width="60" height="60">
+                    <circle class="progress-ring-circle" stroke="#10b981" stroke-width="4" fill="transparent" r="26" cx="30" cy="30" style="stroke-dasharray: 163.36; stroke-dashoffset: 114.35;"/>
+                  </svg>
+                  <div class="progress-text">3/10</div>
+                </div>
+              </div>
+              <div class="challenge-reward">🎁 Reward: +5 comments per hour</div>
+              <div class="challenge-progress-bar">
+                <div class="progress-fill" style="width: 30%"></div>
+              </div>
+            </div>
+
+            <div class="challenge-item completed">
+              <div class="challenge-header">
+                <div class="challenge-icon">✅</div>
+                <div class="challenge-status">
+                  <div class="challenge-title">First Steps</div>
+                  <div class="challenge-description">Complete agent setup</div>
+                </div>
+                <div class="challenge-progress-circle completed">
+                  <svg class="progress-ring" width="60" height="60">
+                    <circle class="progress-ring-circle" stroke="#22c55e" stroke-width="4" fill="transparent" r="26" cx="30" cy="30" style="stroke-dasharray: 163.36; stroke-dashoffset: 0;"/>
+                  </svg>
+                  <div class="progress-text">✓</div>
+                </div>
+              </div>
+              <div class="challenge-reward completed">🎁 Reward: Basic posting enabled</div>
+              <div class="challenge-progress-bar">
+                <div class="progress-fill completed" style="width: 100%"></div>
+              </div>
+            </div>
+
+            <div class="challenge-item locked">
+              <div class="challenge-header">
+                <div class="challenge-icon">🔒</div>
+                <div class="challenge-status">
+                  <div class="challenge-title">Trusted Agent</div>
+                  <div class="challenge-description">Reach 100 karma points</div>
+                </div>
+                <div class="challenge-progress-circle locked">
+                  <svg class="progress-ring" width="60" height="60">
+                    <circle class="progress-ring-circle" stroke="#6b7280" stroke-width="4" fill="transparent" r="26" cx="30" cy="30" style="stroke-dasharray: 163.36; stroke-dashoffset: 163.36;"/>
+                  </svg>
+                  <div class="progress-text">🔒</div>
+                </div>
+              </div>
+              <div class="challenge-reward locked">🎁 Reward: Priority posting queue</div>
+              <div class="challenge-progress-bar">
+                <div class="progress-fill locked" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Skills Page (Now simplified and focused on technical skills) -->
+      <div id="skills" class="page">
+        <header class="page-header">
+          <h2>🛠️ Technical Skills & Integrations</h2>
+          <p>Configure advanced features and external integrations</p>
+        </header>
+
+        <!-- Moltbook Platform Skills -->
+        <div class="card">
+          <h3>🦞 Moltbook Platform Mastery</h3>
+          <p class="card-description">Learn and master Moltbook-specific features</p>
+          
+          <div class="skills-progress">
+            <div class="skill-item">
+              <div class="skill-header">
+                <span class="skill-name">Basic Posting</span>
+                <span class="skill-level">✅ Mastered</span>
+              </div>
+              <div class="skill-description">Create and publish posts to submolts</div>
+            </div>
+
+            <div class="skill-item">
+              <div class="skill-header">
+                <span class="skill-name">Comment Engagement</span>
+                <span class="skill-level">🔄 Learning</span>
+              </div>
+              <div class="skill-description">Reply to posts and engage in discussions</div>
+              <div class="skill-progress-bar">
+                <div class="progress-fill" style="width: 60%"></div>
+              </div>
+            </div>
+
+            <div class="skill-item locked">
+              <div class="skill-header">
+                <span class="skill-name">Submolt Creation</span>
+                <span class="skill-level">🔒 Locked</span>
+              </div>
+              <div class="skill-description">Create and manage your own submolts</div>
+              <div class="unlock-requirement">Requires: 500 karma points</div>
+            </div>
+
+            <div class="skill-item locked">
+              <div class="skill-header">
+                <span class="skill-name">Moderation Tools</span>
+                <span class="skill-level">🔒 Locked</span>
+              </div>
+              <div class="skill-description">Help moderate communities</div>
+              <div class="unlock-requirement">Requires: Trusted Agent status</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- External Integrations -->
+        <div class="card">
+          <h3>🔗 External Integrations</h3>
+          <p class="card-description">Connect your agent to external services and APIs</p>
+          
+          <div class="integrations-grid">
+            <div class="integration-item">
+              <div class="integration-icon">🐦</div>
+              <div class="integration-content">
+                <h4>Twitter/X Integration</h4>
+                <p>Cross-post to Twitter and sync engagement</p>
+                <button class="btn btn-secondary btn-sm">🚧 Coming Soon</button>
+              </div>
+            </div>
+
+            <div class="integration-item">
+              <div class="integration-icon">📊</div>
+              <div class="integration-content">
+                <h4>Analytics Dashboard</h4>
+                <p>Track performance and engagement metrics</p>
+                <button class="btn btn-secondary btn-sm">🚧 Coming Soon</button>
+              </div>
+            </div>
+
+            <div class="integration-item">
+              <div class="integration-icon">🤖</div>
+              <div class="integration-content">
+                <h4>Custom AI Models</h4>
+                <p>Train custom models on your content</p>
+                <button class="btn btn-secondary btn-sm">🚧 Coming Soon</button>
+              </div>
+            </div>
+
+            <div class="integration-item">
+              <div class="integration-icon">📱</div>
+              <div class="integration-content">
+                <h4>Mobile Notifications</h4>
+                <p>Get notified of important events</p>
+                <button class="btn btn-secondary btn-sm">🚧 Coming Soon</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Advanced Configuration -->
+        <div class="card">
+          <h3>⚙️ Advanced Configuration</h3>
+          <p class="card-description">Fine-tune your agent's technical behavior</p>
+          
+          <div class="form-group">
+            <label for="apiTimeout">API Timeout (seconds)</label>
+            <input type="number" id="apiTimeout" value="30" min="10" max="120" class="form-control">
+            <small>How long to wait for API responses</small>
+          </div>
+
+          <div class="form-group">
+            <label for="retryAttempts">Retry Attempts</label>
+            <input type="number" id="retryAttempts" value="3" min="1" max="10" class="form-control">
+            <small>Number of times to retry failed requests</small>
+          </div>
+
+          <div class="form-group">
+            <label for="logLevel">Log Level</label>
+            <select id="logLevel" class="form-control">
+              <option value="error">Error Only</option>
+              <option value="warn">Warnings</option>
+              <option value="info" selected>Info</option>
+              <option value="debug">Debug</option>
+              <option value="verbose">Verbose</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="switch-label">
+              <input type="checkbox" id="enableMetrics">
+              <span class="switch-text">Enable Performance Metrics</span>
+            </label>
+            <small>Collect performance data to improve agent efficiency</small>
+          </div>
+
+          <div class="form-actions">
+            <button id="saveAdvancedConfigBtn" class="btn btn-primary">Save Configuration</button>
+            <button id="exportConfigBtn" class="btn btn-secondary">Export Config</button>
+            <button id="importConfigBtn" class="btn btn-secondary">Import Config</button>
+          </div>
+        </div>
+      </div>
       <div id="drafts" class="page">
         <header class="page-header">
           <h2>Saved Drafts</h2>
@@ -203,6 +748,27 @@
 
         <div class="posts-controls">
           <button id="refreshPostsBtn" class="btn btn-secondary">🔄 Refresh</button>
+          
+          <!-- Post Queue Status -->
+          <div id="postQueueStatus" class="post-queue-status">
+            <div class="queue-info">
+              <span class="queue-icon">📋</span>
+              <span id="queueCount" class="queue-count">0</span>
+              <span class="queue-label">posts queued</span>
+            </div>
+          </div>
+          
+          <!-- Rate Limit Countdown -->
+          <div id="rateLimitStatus" class="rate-limit-status hidden">
+            <div class="rate-limit-card">
+              <div class="rate-limit-icon">⏱️</div>
+              <div class="rate-limit-info">
+                <div class="rate-limit-title">Next Post Available</div>
+                <div id="rateLimitCountdown" class="rate-limit-countdown">--:--</div>
+                <div class="rate-limit-subtitle">Due to Moltbook rate limits</div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div id="postsContainer" class="posts-container">
@@ -293,7 +859,7 @@
 
           <div class="form-group">
             <label for="replySubmolts">Monitor Submolts</label>
-            <input type="text" id="replySubmolts" placeholder="art, music, ai" class="form-control">
+            <input type="text" id="replySubmolts" placeholder="general, introductions" class="form-control">
             <small>Comma-separated list of submolts to monitor (leave empty for all)</small>
           </div>
 
@@ -543,49 +1109,53 @@
           <div id="agentError" class="alert alert-danger hidden"></div>
         </div>
 
-        <!-- Moltbook Identity System - NEW -->
+        <!-- Moltbook Identity System - FUTURE FEATURE -->
         <div class="card">
           <h3>🆔 Moltbook Identity System</h3>
-          <p class="card-description">Secure token-based authentication with reputation tracking</p>
+          <p class="card-description">
+            <strong>🚧 Coming Soon:</strong> Advanced token-based authentication with reputation tracking
+          </p>
+          
+          <div class="alert alert-info">
+            <strong>ℹ️ Current Status:</strong> This feature is in development. Currently, agents are verified through Twitter/X integration during the claim process. The identity token system will be activated when Moltbook's API supports it.
+          </div>
           
           <div id="identityStatus" class="identity-section">
             <div class="identity-info">
               <div class="info-row">
                 <span class="label">Agent Status:</span>
-                <span id="identityAgentStatus" class="value">Checking...</span>
+                <span id="identityAgentStatus" class="value">✅ Verified via Twitter/X</span>
               </div>
               <div class="info-row">
                 <span class="label">Identity Token:</span>
-                <span id="identityTokenStatus" class="value">No token</span>
+                <span id="identityTokenStatus" class="value">🚧 Feature in development</span>
               </div>
               <div class="info-row">
-                <span class="label">Token Expires:</span>
-                <span id="identityTokenExpiry" class="value">-</span>
+                <span class="label">Current Auth:</span>
+                <span class="value">✅ API Key (Twitter verified)</span>
               </div>
             </div>
 
             <div class="form-actions">
-              <button id="generateIdentityTokenBtn" class="btn btn-primary" onclick="if(window.settingsModule && window.settingsModule.generateIdentityToken) window.settingsModule.generateIdentityToken(); else console.error('settingsModule.generateIdentityToken not available');">Generate Identity Token</button>
-              <button id="checkIdentityStatusBtn" class="btn btn-secondary" onclick="if(window.settingsModule && window.settingsModule.loadIdentityStatus) window.settingsModule.loadIdentityStatus(); else console.error('settingsModule.loadIdentityStatus not available');">Check Status</button>
-              <button id="testIdentityTokenBtn" class="btn btn-info" onclick="if(window.settingsModule && window.settingsModule.testIdentityToken) window.settingsModule.testIdentityToken(); else console.error('settingsModule.testIdentityToken not available');">Test Token</button>
-            </div>
-
-            <div id="identityTokenDisplay" class="token-display hidden">
-              <div class="form-group">
-                <label>Identity Token (expires in 1 hour)</label>
-                <div class="input-with-button">
-                  <textarea id="identityTokenValue" readonly rows="3"></textarea>
-                  <button id="copyIdentityTokenBtn" class="btn btn-secondary btn-sm" onclick="if(window.settingsModule && window.settingsModule.copyIdentityToken) window.settingsModule.copyIdentityToken(); else console.error('settingsModule.copyIdentityToken not available');">Copy</button>
-                </div>
-                <small>Use this token for secure authentication with other services</small>
-              </div>
+              <button id="generateIdentityTokenBtn" class="btn btn-primary" disabled title="Feature coming soon">Generate Identity Token</button>
+              <button id="checkIdentityStatusBtn" class="btn btn-secondary" disabled title="Feature coming soon">Check Status</button>
+              <button id="testIdentityTokenBtn" class="btn btn-info" disabled title="Feature coming soon">Test Token</button>
             </div>
 
             <div id="identityInstructions" class="instructions-section">
-              <h4>🔗 How to Use Identity Token</h4>
-              <p>Your identity token allows secure authentication with other services:</p>
-              <ol>
-                <li><strong>Generate Token:</strong> Click "Generate Identity Token" (requires active agent)</li>
+              <h4>🔗 About Identity System</h4>
+              <p>The Moltbook Identity System will provide:</p>
+              <ul>
+                <li><strong>Secure Tokens:</strong> Time-limited authentication tokens</li>
+                <li><strong>Reputation Tracking:</strong> Agent karma and trust scores</li>
+                <li><strong>Cross-Service Auth:</strong> Use your Moltbook identity elsewhere</li>
+                <li><strong>Enhanced Security:</strong> Granular permission controls</li>
+              </ul>
+              
+              <p><strong>Current:</strong> Your agent is already verified through Twitter/X during the claim process. This provides secure authentication for all Moltbook operations.</p>
+            </div>
+          </div>
+        </div>
                 <li><strong>Share Token:</strong> Copy the token and provide it to the service</li>
                 <li><strong>Service Verifies:</strong> The service calls Moltbook to verify your identity</li>
                 <li><strong>Get Profile:</strong> Service receives your agent profile with karma, reputation, etc.</li>
@@ -656,7 +1226,7 @@
           <div class="form-group">
             <div class="info-row">
               <span class="label">Current Version:</span>
-              <span class="value">v1.2.0</span>
+              <span class="value">v1.3.0</span>
             </div>
           </div>
 

@@ -142,6 +142,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   replyToPost: (data) => ipcRenderer.invoke('reply-to-post', data),
   replyToComment: (data) => ipcRenderer.invoke('reply-to-comment', data),
   deletePost: (postId) => ipcRenderer.invoke('delete-post', postId),
+  getRateLimitStatus: () => ipcRenderer.invoke('get-rate-limit-status'),
+
+  // Post Queue
+  getPostQueue: () => ipcRenderer.invoke('get-post-queue'),
+  addToPostQueue: (post) => ipcRenderer.invoke('add-to-post-queue', post),
+  removeFromPostQueue: (id) => ipcRenderer.invoke('remove-from-post-queue', id),
+  toggleAutoPost: (data) => ipcRenderer.invoke('toggle-auto-post', data),
 
   // Logs
   getLogs: () => ipcRenderer.invoke('get-logs'),
@@ -151,6 +158,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   testMoltbookConnection: () => ipcRenderer.invoke('test-moltbook-connection'),
   testAgentLoop: () => ipcRenderer.invoke('test-agent-loop'),
   testHeartbeat: () => ipcRenderer.invoke('test-heartbeat'),
+  debugAgentIssues: () => ipcRenderer.invoke('debug-agent-issues'),
   startAgent: () => ipcRenderer.invoke('start-agent'),
   stopAgent: () => ipcRenderer.invoke('stop-agent'),
   generateReply: (data) => ipcRenderer.invoke('generate-reply', data),
@@ -182,4 +190,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRunCommand: (callback) => ipcRenderer.on('run-command', (event, command) => callback(command)),
   onShowQuickStart: (callback) => ipcRenderer.on('show-quickstart', () => callback()),
   onAgentStatusUpdate: (callback) => ipcRenderer.on('agent-status-update', (event, data) => callback(data)),
+  onQueuePostPublished: (callback) => ipcRenderer.on('queue-post-published', (event, data) => callback(data)),
 });
