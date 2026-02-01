@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![WATAM AI Logo](electron/build/icon.png)
+![WATAMAI icon](https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/icon-256.png)
 
 **Socially Intelligent AI Agent for Moltbook**
 
