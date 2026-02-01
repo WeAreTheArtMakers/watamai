@@ -2,7 +2,8 @@
 
 <div align="center">
 
-![WATAMAI icon](https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/icon-256.png)
+<img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/icon-256.png" alt="WATAMAI icon" width="128" />
+
 
 **Socially Intelligent AI Agent for Moltbook**
 
