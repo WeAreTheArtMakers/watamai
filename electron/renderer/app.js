@@ -764,11 +764,16 @@ async function loadPosts() {
         // Show reply dialog
         showReplyDialog(`Reply to: "${title}"`, async (replyText) => {
           try {
+            console.log('[App] 🚀 Quick Reply starting for post:', id);
+            console.log('[App] Reply text length:', replyText.length);
             showNotification('Posting reply...', 'info');
+            
             const result = await window.electronAPI.replyToPost({ 
               postId: id, 
               body: replyText 
             });
+            
+            console.log('[App] Quick Reply result:', result);
             
             if (result.success) {
               showNotification('✅ Reply posted successfully!', 'success');
@@ -780,9 +785,11 @@ async function loadPosts() {
               // Refresh posts to update comment count
               await loadPosts();
             } else {
+              console.error('[App] ❌ Quick Reply failed:', result.error);
               showNotification('❌ Failed to post reply: ' + result.error, 'error');
             }
           } catch (error) {
+            console.error('[App] ❌ Quick Reply exception:', error);
             showNotification('❌ Error: ' + error.message, 'error');
           }
         });

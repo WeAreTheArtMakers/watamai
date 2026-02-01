@@ -399,6 +399,10 @@
             <button id="startAgentBtn" class="btn btn-success">Start Agent</button>
             <button id="stopAgentBtn" class="btn btn-danger" disabled>Stop Agent</button>
             <button id="testReplyBtn" class="btn btn-secondary">Test Reply</button>
+            <button id="testConnectionBtn" class="btn btn-info">Test Connection</button>
+            <button id="testAgentLoopBtn" class="btn btn-warning">Test Agent Loop</button>
+            <button id="testHeartbeatBtn" class="btn btn-primary">Test Heartbeat</button>
+            <button id="debugAndFixBtn" class="btn btn-danger">🔧 Debug & Fix Issues</button>
           </div>
         </div>
 
@@ -438,7 +442,8 @@
 
         <!-- Moltbook Agent Registration -->
         <div class="card">
-          <h3>🔗 Moltbook Agent</h3>
+          <h3>🔗 Moltbook Agent (Legacy)</h3>
+          <p class="card-description">Traditional agent registration with direct API key</p>
           
           <div id="agentNotRegistered" class="agent-section">
             <p class="info-text">Register your agent with Moltbook to start posting and commenting.</p>
@@ -536,6 +541,74 @@
           </div>
 
           <div id="agentError" class="alert alert-danger hidden"></div>
+        </div>
+
+        <!-- Moltbook Identity System - NEW -->
+        <div class="card">
+          <h3>🆔 Moltbook Identity System</h3>
+          <p class="card-description">Secure token-based authentication with reputation tracking</p>
+          
+          <div id="identityStatus" class="identity-section">
+            <div class="identity-info">
+              <div class="info-row">
+                <span class="label">Agent Status:</span>
+                <span id="identityAgentStatus" class="value">Checking...</span>
+              </div>
+              <div class="info-row">
+                <span class="label">Identity Token:</span>
+                <span id="identityTokenStatus" class="value">No token</span>
+              </div>
+              <div class="info-row">
+                <span class="label">Token Expires:</span>
+                <span id="identityTokenExpiry" class="value">-</span>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button id="generateIdentityTokenBtn" class="btn btn-primary" onclick="if(window.settingsModule && window.settingsModule.generateIdentityToken) window.settingsModule.generateIdentityToken(); else console.error('settingsModule.generateIdentityToken not available');">Generate Identity Token</button>
+              <button id="checkIdentityStatusBtn" class="btn btn-secondary" onclick="if(window.settingsModule && window.settingsModule.loadIdentityStatus) window.settingsModule.loadIdentityStatus(); else console.error('settingsModule.loadIdentityStatus not available');">Check Status</button>
+              <button id="testIdentityTokenBtn" class="btn btn-info" onclick="if(window.settingsModule && window.settingsModule.testIdentityToken) window.settingsModule.testIdentityToken(); else console.error('settingsModule.testIdentityToken not available');">Test Token</button>
+            </div>
+
+            <div id="identityTokenDisplay" class="token-display hidden">
+              <div class="form-group">
+                <label>Identity Token (expires in 1 hour)</label>
+                <div class="input-with-button">
+                  <textarea id="identityTokenValue" readonly rows="3"></textarea>
+                  <button id="copyIdentityTokenBtn" class="btn btn-secondary btn-sm" onclick="if(window.settingsModule && window.settingsModule.copyIdentityToken) window.settingsModule.copyIdentityToken(); else console.error('settingsModule.copyIdentityToken not available');">Copy</button>
+                </div>
+                <small>Use this token for secure authentication with other services</small>
+              </div>
+            </div>
+
+            <div id="identityInstructions" class="instructions-section">
+              <h4>🔗 How to Use Identity Token</h4>
+              <p>Your identity token allows secure authentication with other services:</p>
+              <ol>
+                <li><strong>Generate Token:</strong> Click "Generate Identity Token" (requires active agent)</li>
+                <li><strong>Share Token:</strong> Copy the token and provide it to the service</li>
+                <li><strong>Service Verifies:</strong> The service calls Moltbook to verify your identity</li>
+                <li><strong>Get Profile:</strong> Service receives your agent profile with karma, reputation, etc.</li>
+              </ol>
+              
+              <div class="alert alert-info">
+                <strong>💡 Benefits:</strong>
+                <ul>
+                  <li>🔐 <strong>Secure:</strong> Never share your API key</li>
+                  <li>⏱️ <strong>Temporary:</strong> Tokens expire in 1 hour</li>
+                  <li>🏆 <strong>Reputation:</strong> Services get your karma score and verified status</li>
+                  <li>👤 <strong>Owner Info:</strong> Includes your X/Twitter handle and verification</li>
+                </ul>
+              </div>
+            </div>
+
+            <div id="identityTestResult" class="test-result hidden">
+              <h4>🧪 Token Verification Result</h4>
+              <div id="identityTestContent"></div>
+            </div>
+          </div>
+
+          <div id="identityError" class="alert alert-danger hidden"></div>
         </div>
 
         <!-- Safe Mode Settings -->

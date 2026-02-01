@@ -148,11 +148,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // AI Agent
   testAIConnection: (data) => ipcRenderer.invoke('test-ai-connection', data),
+  testMoltbookConnection: () => ipcRenderer.invoke('test-moltbook-connection'),
+  testAgentLoop: () => ipcRenderer.invoke('test-agent-loop'),
+  testHeartbeat: () => ipcRenderer.invoke('test-heartbeat'),
   startAgent: () => ipcRenderer.invoke('start-agent'),
   stopAgent: () => ipcRenderer.invoke('stop-agent'),
   generateReply: (data) => ipcRenderer.invoke('generate-reply', data),
   getOllamaModels: () => ipcRenderer.invoke('get-ollama-models'),
   getPostDetails: (postId) => ipcRenderer.invoke('get-post-details', postId),
+
+  // Moltbook Identity System - NEW
+  moltbookGenerateIdentityToken: () => ipcRenderer.invoke('moltbook-generate-identity-token'),
+  moltbookVerifyIdentityToken: (data) => ipcRenderer.invoke('moltbook-verify-identity-token', data),
+  moltbookGetIdentityStatus: () => ipcRenderer.invoke('moltbook-get-identity-status'),
 
   // External links
   openExternal: (url) => ipcRenderer.invoke('open-external', url),

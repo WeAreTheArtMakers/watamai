@@ -212,6 +212,112 @@ const store = new SimpleStore();
 // Moltbook API Base URL - ALWAYS use www
 const MOLTBOOK_BASE_URL = 'https://www.moltbook.com';
 
+// Moltbook Identity System - New API endpoints
+const MOLTBOOK_IDENTITY_ENDPOINTS = {
+  generateToken: '/api/v1/agents/me/identity-token',
+  verifyToken: '/api/v1/agents/verify-identity',
+  agentProfile: '/api/v1/agents/me'
+};
+
+// Moltbook skill.md content cache
+let moltbookSkillContent = null;
+let lastSkillFetch = null;
+
+// Fetch and parse Moltbook skill.md for instructions
+async function fetchAndParseMoltbookSkill() {
+  const https = require('https');
+  
+  // Check if we have recent skill content (cache for 1 hour)
+  if (moltbookSkillContent && lastSkillFetch && (Date.now() - lastSkillFetch < 3600000)) {
+    console.log('[Moltbook] Using cached skill.md content');
+    return moltbookSkillContent;
+  }
+  
+  console.log('[Moltbook] Fetching fresh skill.md from Moltbook...');
+  
+  return new Promise((resolve, reject) => {
+    const url = `${MOLTBOOK_BASE_URL}/skill.md`;
+    
+    https.get(url, (res) => {
+      let data = '';
+      
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        if (res.statusCode === 200) {
+          console.log('[Moltbook] ✅ skill.md fetched successfully');
+          moltbookSkillContent = data;
+          lastSkillFetch = Date.now();
+          
+          // Parse the skill content for API endpoints and instructions
+          const skillInfo = parseMoltbookSkill(data);
+          resolve(skillInfo);
+        } else {
+          console.error('[Moltbook] ❌ Failed to fetch skill.md:', res.statusCode);
+          reject(new Error(`Failed to fetch skill.md: ${res.statusCode}`));
+        }
+      });
+    }).on('error', (error) => {
+      console.error('[Moltbook] ❌ skill.md fetch error:', error);
+      reject(error);
+    });
+  });
+}
+
+// Parse Moltbook skill.md content to extract API info
+function parseMoltbookSkill(skillContent) {
+  console.log('[Moltbook] 📖 Parsing skill.md content...');
+  
+  const skillInfo = {
+    apiEndpoints: [],
+    instructions: [],
+    heartbeatInterval: 4 * 60 * 60 * 1000, // 4 hours default
+    submolts: [],
+    postingGuidelines: [],
+  };
+  
+  // Extract API endpoints
+  const apiMatches = skillContent.match(/https:\/\/www\.moltbook\.com\/api\/[^\s\)]+/g);
+  if (apiMatches) {
+    skillInfo.apiEndpoints = [...new Set(apiMatches)]; // Remove duplicates
+    console.log('[Moltbook] 📡 Found API endpoints:', skillInfo.apiEndpoints);
+  }
+  
+  // Extract heartbeat interval if specified
+  const heartbeatMatch = skillContent.match(/(\d+)\s*hours?/i);
+  if (heartbeatMatch) {
+    skillInfo.heartbeatInterval = parseInt(heartbeatMatch[1]) * 60 * 60 * 1000;
+    console.log('[Moltbook] ⏰ Heartbeat interval:', heartbeatMatch[1], 'hours');
+  }
+  
+  // Extract submolt recommendations
+  const submoltMatches = skillContent.match(/m\/[\w-]+/g);
+  if (submoltMatches) {
+    skillInfo.submolts = [...new Set(submoltMatches)];
+    console.log('[Moltbook] 🏷️ Found submolts:', skillInfo.submolts);
+  }
+  
+  // Extract posting guidelines
+  const lines = skillContent.split('\n');
+  let inGuidelines = false;
+  
+  for (const line of lines) {
+    if (line.toLowerCase().includes('guideline') || line.toLowerCase().includes('rule')) {
+      inGuidelines = true;
+    }
+    
+    if (inGuidelines && line.trim().startsWith('-')) {
+      skillInfo.postingGuidelines.push(line.trim().substring(1).trim());
+    }
+  }
+  
+  console.log('[Moltbook] 📋 Extracted', skillInfo.postingGuidelines.length, 'posting guidelines');
+  
+  return skillInfo;
+}
+
 // Auto-start agent if it was running before app closed
 app.on('ready', () => {
   setTimeout(() => {
@@ -286,13 +392,41 @@ function deobfuscateKey(obfuscated) {
   return Buffer.from(obfuscated, 'base64').toString('utf8');
 }
 
-// Moltbook API: Register agent
+// Moltbook API: Register agent with skill.md learning
 async function registerMoltbookAgent(name, description) {
   const https = require('https');
-  const url = `${MOLTBOOK_BASE_URL}/api/v1/agents/register`;
+  
+  console.log('[Moltbook] 🎓 Learning from skill.md before registration...');
+  
+  // First, fetch and learn from skill.md
+  let skillInfo;
+  try {
+    skillInfo = await fetchAndParseMoltbookSkill();
+    console.log('[Moltbook] ✅ Learned from skill.md');
+  } catch (error) {
+    console.warn('[Moltbook] ⚠️ Could not fetch skill.md, proceeding with defaults:', error.message);
+    skillInfo = {
+      apiEndpoints: [`${MOLTBOOK_BASE_URL}/api/v1/agents/register`],
+      heartbeatInterval: 4 * 60 * 60 * 1000,
+      submolts: [],
+      postingGuidelines: [],
+    };
+  }
+  
+  // Use the registration endpoint from skill.md or fallback
+  const registrationEndpoint = skillInfo.apiEndpoints.find(ep => ep.includes('register')) || 
+                               `${MOLTBOOK_BASE_URL}/api/v1/agents/register`;
+  
+  console.log('[Moltbook] 📝 Registering agent at:', registrationEndpoint);
 
   return new Promise((resolve, reject) => {
-    const postData = JSON.stringify({ name, description });
+    const postData = JSON.stringify({ 
+      name, 
+      description,
+      // Include skill-learned information
+      capabilities: skillInfo.postingGuidelines.slice(0, 5), // First 5 guidelines
+      preferred_submolts: skillInfo.submolts.slice(0, 3), // First 3 submolts
+    });
 
     const options = {
       method: 'POST',
@@ -305,7 +439,7 @@ async function registerMoltbookAgent(name, description) {
       maxRedirects: 0,
     };
 
-    const req = https.request(url, options, (res) => {
+    const req = https.request(registrationEndpoint, options, (res) => {
       let data = '';
 
       // Handle redirects as errors
@@ -319,9 +453,16 @@ async function registerMoltbookAgent(name, description) {
       });
 
       res.on('end', () => {
+        console.log('[Moltbook] Registration response:', res.statusCode, data.substring(0, 200));
+        
         if (res.statusCode === 200 || res.statusCode === 201) {
           try {
             const result = JSON.parse(data);
+            
+            // Store skill info with the agent
+            result.skillInfo = skillInfo;
+            result.learnedAt = new Date().toISOString();
+            
             resolve(result);
           } catch (error) {
             reject(new Error('Invalid JSON response'));
@@ -341,8 +482,186 @@ async function registerMoltbookAgent(name, description) {
   });
 }
 
-// Moltbook API: Check agent status
-async function checkMoltbookStatus(apiKey) {
+// Moltbook Identity: Generate identity token for secure authentication
+async function generateMoltbookIdentityToken(apiKey) {
+  const https = require('https');
+  const url = `${MOLTBOOK_BASE_URL}${MOLTBOOK_IDENTITY_ENDPOINTS.generateToken}`;
+
+  console.log('[Moltbook Identity] 🎫 Generating identity token...');
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      req.destroy();
+      reject(new Error('⏱️ Token generation timeout'));
+    }, 30000);
+
+    const options = {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'User-Agent': 'WATAM-AI/1.2.0',
+        'Content-Type': 'application/json'
+      },
+      maxRedirects: 0,
+    };
+
+    console.log('[Moltbook Identity] 📡 Request URL:', url);
+    console.log('[Moltbook Identity] 🔑 API Key:', maskApiKey(apiKey));
+
+    const req = https.request(url, options, (res) => {
+      clearTimeout(timeout);
+      let data = '';
+
+      if (res.statusCode === 301 || res.statusCode === 302) {
+        console.error('[Moltbook Identity] ❌ Redirect detected');
+        reject(new Error('Redirect detected - ensure using https://www.moltbook.com'));
+        return;
+      }
+
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+
+      res.on('end', () => {
+        console.log('[Moltbook Identity] 📡 Token Response:', res.statusCode);
+        console.log('[Moltbook Identity] 📄 Response Body:', data.substring(0, 200));
+        
+        if (res.statusCode === 200 || res.statusCode === 201) {
+          try {
+            const parsed = JSON.parse(data);
+            console.log('[Moltbook Identity] ✅ Identity token generated successfully');
+            console.log('[Moltbook Identity] 🎫 Token preview:', parsed.token?.substring(0, 20) + '...');
+            resolve(parsed);
+          } catch (error) {
+            console.error('[Moltbook Identity] ❌ JSON parse error:', error);
+            reject(new Error('Invalid JSON response from token endpoint'));
+          }
+        } else if (res.statusCode === 401) {
+          console.error('[Moltbook Identity] ❌ 401 Unauthorized - API key invalid');
+          reject(new Error('API key invalid or expired - cannot generate identity token'));
+        } else if (res.statusCode === 403) {
+          console.error('[Moltbook Identity] ❌ 403 Forbidden - agent not claimed');
+          reject(new Error('Agent not claimed - complete claim process first'));
+        } else {
+          console.error('[Moltbook Identity] ❌ Unexpected status:', res.statusCode);
+          reject(new Error(`Token generation failed: HTTP ${res.statusCode}`));
+        }
+      });
+    });
+
+    req.on('error', (error) => {
+      clearTimeout(timeout);
+      console.error('[Moltbook Identity] ❌ Request error:', error);
+      if (error.code === 'ECONNREFUSED') {
+        reject(new Error('🔌 Cannot connect to Moltbook server'));
+      } else if (error.code === 'ETIMEDOUT') {
+        reject(new Error('⏱️ Moltbook server timeout'));
+      } else {
+        reject(new Error(`🔌 Network error: ${error.message}`));
+      }
+    });
+
+    req.end();
+  });
+}
+
+// Moltbook Identity: Verify identity token and get agent profile
+async function verifyMoltbookIdentityToken(identityToken, appKey) {
+  const https = require('https');
+  const url = `${MOLTBOOK_BASE_URL}${MOLTBOOK_IDENTITY_ENDPOINTS.verifyToken}`;
+
+  console.log('[Moltbook Identity] 🔍 Verifying identity token...');
+
+  return new Promise((resolve, reject) => {
+    const postData = JSON.stringify({ token: identityToken });
+    
+    const timeout = setTimeout(() => {
+      req.destroy();
+      reject(new Error('⏱️ Token verification timeout'));
+    }, 30000);
+
+    const options = {
+      method: 'POST',
+      headers: {
+        'X-Moltbook-App-Key': appKey,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+        'User-Agent': 'WATAM-AI/1.2.0',
+      },
+      maxRedirects: 0,
+    };
+
+    console.log('[Moltbook Identity] 📡 Verify URL:', url);
+    console.log('[Moltbook Identity] 🔑 App Key:', appKey ? appKey.substring(0, 15) + '...' : 'missing');
+    console.log('[Moltbook Identity] 🎫 Token preview:', identityToken.substring(0, 20) + '...');
+
+    const req = https.request(url, options, (res) => {
+      clearTimeout(timeout);
+      let data = '';
+
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+
+      res.on('end', () => {
+        console.log('[Moltbook Identity] 📡 Verify Response:', res.statusCode);
+        console.log('[Moltbook Identity] 📄 Response Body:', data.substring(0, 500));
+        
+        if (res.statusCode === 200) {
+          try {
+            const parsed = JSON.parse(data);
+            console.log('[Moltbook Identity] 🔍 Verification Result:', {
+              valid: parsed.valid,
+              hasAgent: !!parsed.agent,
+              agentName: parsed.agent?.name,
+              karma: parsed.agent?.karma,
+              isClaimed: parsed.agent?.is_claimed,
+              hasOwner: !!parsed.agent?.owner
+            });
+            
+            if (parsed.valid && parsed.agent) {
+              console.log('[Moltbook Identity] ✅ Token verified successfully');
+              console.log('[Moltbook Identity] 👤 Agent:', parsed.agent.name);
+              console.log('[Moltbook Identity] 🏆 Karma:', parsed.agent.karma);
+              console.log('[Moltbook Identity] ✅ Claimed:', parsed.agent.is_claimed);
+              if (parsed.agent.owner) {
+                console.log('[Moltbook Identity] 👨‍💼 Owner:', parsed.agent.owner.x_handle, parsed.agent.owner.x_verified ? '✅' : '❌');
+              }
+              resolve(parsed);
+            } else {
+              console.error('[Moltbook Identity] ❌ Token invalid or agent not found');
+              resolve({ valid: false, error: parsed.error || 'Token invalid' });
+            }
+          } catch (error) {
+            console.error('[Moltbook Identity] ❌ JSON parse error:', error);
+            reject(new Error('Invalid JSON response from verify endpoint'));
+          }
+        } else if (res.statusCode === 400) {
+          console.error('[Moltbook Identity] ❌ 400 Bad Request - invalid token format');
+          resolve({ valid: false, error: 'invalid_token' });
+        } else if (res.statusCode === 401) {
+          console.error('[Moltbook Identity] ❌ 401 Unauthorized - invalid app key');
+          resolve({ valid: false, error: 'invalid_app_key' });
+        } else if (res.statusCode === 403) {
+          console.error('[Moltbook Identity] ❌ 403 Forbidden - token expired');
+          resolve({ valid: false, error: 'identity_token_expired' });
+        } else {
+          console.error('[Moltbook Identity] ❌ Unexpected status:', res.statusCode);
+          reject(new Error(`Token verification failed: HTTP ${res.statusCode}`));
+        }
+      });
+    });
+
+    req.on('error', (error) => {
+      clearTimeout(timeout);
+      console.error('[Moltbook Identity] ❌ Request error:', error);
+      reject(error);
+    });
+
+    req.write(postData);
+    req.end();
+  });
+}
   const https = require('https');
   const url = `${MOLTBOOK_BASE_URL}/api/v1/agents/me`;
 
@@ -362,11 +681,16 @@ async function checkMoltbookStatus(apiKey) {
       maxRedirects: 0,
     };
 
+    console.log('[Moltbook] 🔍 Checking agent status...');
+    console.log('[Moltbook] API Key:', maskApiKey(apiKey));
+    console.log('[Moltbook] Request URL:', url);
+
     const req = https.request(url, options, (res) => {
       clearTimeout(timeout);
       let data = '';
 
       if (res.statusCode === 301 || res.statusCode === 302) {
+        console.error('[Moltbook] ❌ Redirect detected - ensure using https://www.moltbook.com');
         reject(new Error('Redirect detected'));
         return;
       }
@@ -376,18 +700,102 @@ async function checkMoltbookStatus(apiKey) {
       });
 
       res.on('end', () => {
+        console.log('[Moltbook] 📡 Status Response:', res.statusCode);
+        console.log('[Moltbook] 📋 Response Headers:', JSON.stringify(res.headers, null, 2));
+        console.log('[Moltbook] 📄 Response Body (first 500 chars):', data.substring(0, 500));
+        
         if (res.statusCode === 200) {
-          resolve({ status: 'active', statusCode: res.statusCode });
-        } else if (res.statusCode === 401 || res.statusCode === 403) {
-          resolve({ status: 'claim_pending', statusCode: res.statusCode });
+          // Parse response to check if agent is actually active
+          try {
+            const parsed = JSON.parse(data);
+            console.log('[Moltbook] 🔍 Parsed Response Structure:', {
+              hasId: !!parsed.id,
+              hasName: !!parsed.name,
+              hasAgent: !!parsed.agent,
+              hasStatus: !!parsed.status,
+              keys: Object.keys(parsed),
+              fullData: JSON.stringify(parsed, null, 2)
+            });
+            
+            // Check multiple possible response structures
+            let isValidAgent = false;
+            let agentData = null;
+            
+            // Direct agent object
+            if (parsed.id || parsed.name) {
+              isValidAgent = true;
+              agentData = parsed;
+              console.log('[Moltbook] ✅ Found direct agent object');
+            }
+            // Nested agent object
+            else if (parsed.agent && (parsed.agent.id || parsed.agent.name)) {
+              isValidAgent = true;
+              agentData = parsed.agent;
+              console.log('[Moltbook] ✅ Found nested agent object');
+            }
+            // Data wrapper
+            else if (parsed.data && (parsed.data.id || parsed.data.name)) {
+              isValidAgent = true;
+              agentData = parsed.data;
+              console.log('[Moltbook] ✅ Found agent in data wrapper');
+            }
+            // Success flag with agent data
+            else if (parsed.success && parsed.agent) {
+              isValidAgent = true;
+              agentData = parsed.agent;
+              console.log('[Moltbook] ✅ Found agent with success flag');
+            }
+            
+            if (isValidAgent && agentData) {
+              console.log('[Moltbook] ✅ AGENT IS ACTIVE - API key is valid');
+              console.log('[Moltbook] 👤 Agent Details:', {
+                id: agentData.id,
+                name: agentData.name,
+                status: agentData.status
+              });
+              resolve({ status: 'active', statusCode: res.statusCode, data: agentData });
+            } else {
+              // Got 200 but no valid agent data
+              console.error('[Moltbook] ❌ Got 200 but no valid agent data');
+              console.error('[Moltbook] 🔍 This might mean:');
+              console.error('[Moltbook] - API endpoint changed');
+              console.error('[Moltbook] - Response format changed');
+              console.error('[Moltbook] - Agent not properly registered');
+              resolve({ status: 'error', statusCode: res.statusCode, message: 'Invalid agent data - agent might not be properly registered' });
+            }
+          } catch (e) {
+            // JSON parse error
+            console.error('[Moltbook] ❌ JSON parse error:', e.message);
+            console.error('[Moltbook] 📄 Raw response:', data);
+            resolve({ status: 'error', statusCode: res.statusCode, message: 'Invalid JSON response from Moltbook API' });
+          }
+        } else if (res.statusCode === 401) {
+          console.error('[Moltbook] ❌ 401 Unauthorized - API key invalid or expired');
+          console.error('[Moltbook] 💡 Solutions:');
+          console.error('[Moltbook] - Re-register your agent');
+          console.error('[Moltbook] - Complete the claim process on Moltbook website');
+          console.error('[Moltbook] - Check if API key was corrupted');
+          resolve({ status: 'error', statusCode: res.statusCode, message: 'API key invalid or expired - please re-register agent' });
+        } else if (res.statusCode === 403) {
+          console.error('[Moltbook] ❌ 403 Forbidden - claim not completed');
+          console.error('[Moltbook] 💡 Solution: Complete the claim process on Moltbook website');
+          resolve({ status: 'error', statusCode: res.statusCode, message: 'Claim not completed - please complete claim process on Moltbook' });
+        } else if (res.statusCode === 404) {
+          console.error('[Moltbook] ❌ 404 Not Found - agent not found');
+          console.error('[Moltbook] 💡 Solution: Re-register your agent');
+          resolve({ status: 'error', statusCode: res.statusCode, message: 'Agent not found - please re-register agent' });
         } else {
-          resolve({ status: 'error', statusCode: res.statusCode, message: data });
+          // Any other status code is an error
+          console.error('[Moltbook] ❌ Unexpected status code:', res.statusCode);
+          console.error('[Moltbook] 📄 Response:', data.substring(0, 200));
+          resolve({ status: 'error', statusCode: res.statusCode, message: `HTTP ${res.statusCode}: ${data.substring(0, 100)}` });
         }
       });
     });
 
     req.on('error', (error) => {
       clearTimeout(timeout);
+      console.error('[Moltbook] ❌ Request error:', error);
       // Better error message for network issues
       if (error.code === 'ECONNREFUSED') {
         reject(new Error('🔌 Cannot connect to Moltbook server. Server might be down.'));
@@ -400,6 +808,207 @@ async function checkMoltbookStatus(apiKey) {
 
     req.end();
   });
+
+// Test API key permissions by trying to access agent-specific endpoints
+async function testApiKeyPermissions(apiKey) {
+  const https = require('https');
+  
+  console.log('[Test] 🧪 Testing API key permissions...');
+  console.log('[Test] 🔑 API Key:', maskApiKey(apiKey));
+  
+  return new Promise((resolve) => {
+    const options = {
+      hostname: 'www.moltbook.com',
+      path: '/api/v1/agents/me/posts', // Try to get agent's own posts
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'User-Agent': 'WATAM-AI/1.2.0',
+      },
+    };
+
+    console.log('[Test] 📡 Testing endpoint:', `https://${options.hostname}${options.path}`);
+    
+    const req = https.request(options, (res) => {
+      let data = '';
+      
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        console.log('[Test] 📋 Permissions test response:', res.statusCode);
+        console.log('[Test] 📄 Response body (first 200 chars):', data.substring(0, 200));
+        
+        if (res.statusCode === 200) {
+          console.log('[Test] ✅ API key has full permissions');
+          resolve({ canPost: true, status: res.statusCode, message: 'Full permissions confirmed' });
+        } else if (res.statusCode === 401) {
+          console.log('[Test] ❌ API key is invalid or expired (401)');
+          resolve({ canPost: false, status: res.statusCode, error: 'API key invalid or expired' });
+        } else if (res.statusCode === 403) {
+          console.log('[Test] ❌ API key lacks permissions (403)');
+          resolve({ canPost: false, status: res.statusCode, error: 'Insufficient permissions - claim not completed' });
+        } else if (res.statusCode === 404) {
+          console.log('[Test] ⚠️ Endpoint not found (404) - might be normal');
+          resolve({ canPost: true, status: res.statusCode, warning: 'Endpoint not found but API key might still work' });
+        } else {
+          console.log('[Test] ⚠️ Unexpected response:', res.statusCode);
+          resolve({ canPost: true, status: res.statusCode, warning: 'Unexpected response but proceeding' });
+        }
+      });
+    });
+
+    req.on('error', (error) => {
+      console.error('[Test] ❌ Permissions test failed:', error.message);
+      resolve({ canPost: true, error: error.message }); // Assume it can post if test fails
+    });
+
+    // Set timeout
+    setTimeout(() => {
+      req.destroy();
+      console.log('[Test] ⏱️ Permissions test timeout');
+      resolve({ canPost: true, error: 'Timeout' });
+    }, 10000);
+
+    req.end();
+  });
+}
+
+// Comprehensive API key debugging function
+async function debugApiKeyIssues(apiKey) {
+  console.log('[Debug] 🔍 ========================================');
+  console.log('[Debug] 🔍 COMPREHENSIVE API KEY DEBUGGING');
+  console.log('[Debug] 🔍 ========================================');
+  
+  const results = {
+    apiKeyFormat: null,
+    agentStatus: null,
+    permissions: null,
+    directPostTest: null,
+    recommendations: []
+  };
+  
+  // Test 1: API Key Format
+  console.log('[Debug] 1️⃣ Testing API key format...');
+  if (!apiKey) {
+    results.apiKeyFormat = { valid: false, error: 'API key is null or undefined' };
+  } else if (apiKey.length < 20) {
+    results.apiKeyFormat = { valid: false, error: 'API key too short (corrupted?)' };
+  } else if (!apiKey.startsWith('mb_') && !apiKey.includes('_')) {
+    results.apiKeyFormat = { valid: false, error: 'API key format looks invalid' };
+  } else {
+    results.apiKeyFormat = { valid: true, length: apiKey.length, prefix: apiKey.substring(0, 10) + '...' };
+  }
+  console.log('[Debug] API Key Format:', results.apiKeyFormat);
+  
+  if (!results.apiKeyFormat.valid) {
+    results.recommendations.push('Re-register agent to get new API key');
+    return results;
+  }
+  
+  // Test 2: Agent Status Check
+  console.log('[Debug] 2️⃣ Testing agent status...');
+  try {
+    const statusResult = await checkMoltbookStatus(apiKey);
+    results.agentStatus = {
+      success: true,
+      status: statusResult.status,
+      statusCode: statusResult.statusCode,
+      hasData: !!statusResult.data
+    };
+    
+    if (statusResult.status !== 'active') {
+      results.recommendations.push('Complete claim process on Moltbook website');
+    }
+  } catch (error) {
+    results.agentStatus = {
+      success: false,
+      error: error.message
+    };
+    results.recommendations.push('Check network connection and Moltbook server status');
+  }
+  console.log('[Debug] Agent Status:', results.agentStatus);
+  
+  // Test 3: API Permissions
+  console.log('[Debug] 3️⃣ Testing API permissions...');
+  try {
+    const permResult = await testApiKeyPermissions(apiKey);
+    results.permissions = permResult;
+    
+    if (!permResult.canPost) {
+      results.recommendations.push('Complete claim process - API key lacks posting permissions');
+    }
+  } catch (error) {
+    results.permissions = {
+      success: false,
+      error: error.message
+    };
+  }
+  console.log('[Debug] Permissions:', results.permissions);
+  
+  // Test 4: Direct Post Test (to a test endpoint)
+  console.log('[Debug] 4️⃣ Testing direct API call...');
+  try {
+    const https = require('https');
+    
+    const testResult = await new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: '/api/v1/agents/me',
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.2.0',
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          resolve({
+            statusCode: res.statusCode,
+            hasData: data.length > 0,
+            dataPreview: data.substring(0, 100)
+          });
+        });
+      });
+
+      req.on('error', (error) => {
+        resolve({ error: error.message });
+      });
+
+      setTimeout(() => {
+        req.destroy();
+        resolve({ error: 'Timeout' });
+      }, 10000);
+
+      req.end();
+    });
+    
+    results.directPostTest = testResult;
+  } catch (error) {
+    results.directPostTest = { error: error.message };
+  }
+  console.log('[Debug] Direct Test:', results.directPostTest);
+  
+  // Generate recommendations
+  if (results.recommendations.length === 0) {
+    if (results.agentStatus?.status === 'active' && results.permissions?.canPost) {
+      results.recommendations.push('API key appears to be working correctly');
+      results.recommendations.push('Issue might be with Safe Mode or network connectivity');
+    } else {
+      results.recommendations.push('Check Moltbook website for agent status');
+    }
+  }
+  
+  console.log('[Debug] 🔍 ========================================');
+  console.log('[Debug] 🔍 DEBUGGING COMPLETE');
+  console.log('[Debug] 🔍 Recommendations:', results.recommendations);
+  console.log('[Debug] 🔍 ========================================');
+  
+  return results;
 }
 
 // Moltbook API: Fetch skill.md
@@ -701,7 +1310,101 @@ ipcMain.handle('save-config', (event, config) => {
   return { success: true };
 });
 
-// Moltbook Agent IPC Handlers
+// Moltbook Identity IPC Handlers - NEW SYSTEM
+ipcMain.handle('moltbook-generate-identity-token', async () => {
+  try {
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    console.log('[Identity] Generating identity token for agent:', agent.name);
+    
+    const result = await generateMoltbookIdentityToken(apiKey);
+    
+    // Store the identity token temporarily (expires in 1 hour)
+    const tokenData = {
+      token: result.token,
+      generatedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hour
+    };
+    
+    store.set('moltbookIdentityToken', tokenData);
+    store.audit('moltbook.identity_token_generated', { agentName: agent.name });
+    
+    return { success: true, token: result.token, expiresAt: tokenData.expiresAt };
+  } catch (error) {
+    console.error('[Identity] Failed to generate identity token:', error);
+    store.audit('moltbook.identity_token_failed', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('moltbook-verify-identity-token', async (event, { token, appKey }) => {
+  try {
+    console.log('[Identity] Verifying identity token...');
+    
+    const result = await verifyMoltbookIdentityToken(token, appKey);
+    
+    if (result.valid) {
+      console.log('[Identity] ✅ Token verified successfully');
+      store.audit('moltbook.identity_verified', { 
+        agentName: result.agent.name,
+        karma: result.agent.karma,
+        isClaimed: result.agent.is_claimed 
+      });
+    } else {
+      console.log('[Identity] ❌ Token verification failed:', result.error);
+      store.audit('moltbook.identity_verification_failed', { error: result.error });
+    }
+    
+    return { success: true, ...result };
+  } catch (error) {
+    console.error('[Identity] Identity verification error:', error);
+    store.audit('moltbook.identity_verification_error', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('moltbook-get-identity-status', async () => {
+  try {
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+
+    const tokenData = store.get('moltbookIdentityToken');
+    const now = new Date();
+    
+    let identityStatus = {
+      hasToken: false,
+      tokenExpired: true,
+      canGenerateToken: agent.status === 'active',
+      agentName: agent.name,
+      agentStatus: agent.status,
+    };
+    
+    if (tokenData && tokenData.token) {
+      const expiresAt = new Date(tokenData.expiresAt);
+      identityStatus.hasToken = true;
+      identityStatus.tokenExpired = now > expiresAt;
+      identityStatus.expiresAt = tokenData.expiresAt;
+      identityStatus.generatedAt = tokenData.generatedAt;
+      
+      if (!identityStatus.tokenExpired) {
+        identityStatus.token = tokenData.token;
+      }
+    }
+    
+    return { success: true, identity: identityStatus };
+  } catch (error) {
+    console.error('[Identity] Failed to get identity status:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Legacy Moltbook Agent IPC Handlers - KEEPING FOR BACKWARD COMPATIBILITY
 ipcMain.handle('moltbook-register', async (event, { name, description }) => {
   try {
     store.audit('moltbook.register.attempt', { name });
@@ -1224,27 +1927,111 @@ ipcMain.handle('get-post-comments', async (event, postId) => {
   }
 });
 
-ipcMain.handle('reply-to-post', async (event, { postId, body }) => {
+ipcMain.handle('test-heartbeat', async () => {
   try {
-    console.log('[Reply] Replying to post:', postId);
+    console.log('[Test] 🧪 Manual heartbeat test triggered');
+    await runMoltbookHeartbeat();
+    return { success: true, message: 'Heartbeat test completed - check console for details' };
+  } catch (error) {
+    console.error('[Test] ❌ Heartbeat test failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('test-agent-loop', async () => {
+  try {
+    console.log('[Test] 🧪 Manual agent loop test triggered');
+    await runAgentLoop();
+    return { success: true, message: 'Agent loop test completed - check console for details' };
+  } catch (error) {
+    console.error('[Test] ❌ Agent loop test failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('test-moltbook-connection', async () => {
+  try {
+    console.log('[Test] ========================================');
+    console.log('[Test] COMPREHENSIVE MOLTBOOK CONNECTION TEST');
+    console.log('[Test] ========================================');
     
     const agent = store.getAgent();
     if (!agent) {
-      console.error('[Reply] No agent registered');
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    console.log('[Test] Testing with API key:', maskApiKey(apiKey));
+    
+    // Run comprehensive debugging
+    const debugResults = await debugApiKeyIssues(apiKey);
+    
+    const results = {
+      agentStatus: debugResults.agentStatus,
+      agentPosts: debugResults.permissions,
+      testPost: debugResults.directPostTest,
+      safeMode: store.get('safeMode', true),
+      apiKeyFormat: debugResults.apiKeyFormat,
+      recommendations: debugResults.recommendations,
+    };
+    
+    console.log('[Test] ========================================');
+    console.log('[Test] TEST RESULTS SUMMARY:');
+    console.log('[Test] API Key Format:', debugResults.apiKeyFormat?.valid ? '✅' : '❌');
+    console.log('[Test] Agent Status:', debugResults.agentStatus?.success ? '✅' : '❌');
+    console.log('[Test] Agent Posts:', debugResults.permissions?.canPost ? '✅' : '❌');
+    console.log('[Test] Safe Mode:', results.safeMode ? '🔒 ON' : '🔓 OFF');
+    console.log('[Test] Recommendations:');
+    debugResults.recommendations.forEach((rec, i) => {
+      console.log(`[Test] ${i + 1}. ${rec}`);
+    });
+    console.log('[Test] ========================================');
+    
+    return { success: true, results };
+  } catch (error) {
+    console.error('[Test] ❌ Connection test failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('reply-to-post', async (event, { postId, body }) => {
+  try {
+    console.log('[Reply] ========================================');
+    console.log('[Reply] Replying to post:', postId);
+    console.log('[Reply] Reply body length:', body.length);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      console.error('[Reply] ❌ No agent registered');
       return { success: false, error: 'No agent registered. Please register an agent in Settings first.' };
     }
 
+    console.log('[Reply] Agent found:', {
+      name: agent.name,
+      status: agent.status,
+      hasApiKey: !!agent.apiKeyObfuscated,
+      lastChecked: agent.lastCheckedAt,
+    });
+
     // Check agent status in real-time before posting
-    console.log('[Reply] Checking agent status...');
+    console.log('[Reply] Checking agent status in real-time...');
     try {
       const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+      console.log('[Reply] Deobfuscated API key:', maskApiKey(apiKey));
+      
       const statusCheck = await checkMoltbookStatus(apiKey);
-      console.log('[Reply] Agent status check result:', statusCheck);
+      console.log('[Reply] Agent status check result:', {
+        status: statusCheck.status,
+        statusCode: statusCheck.statusCode,
+        hasData: !!statusCheck.data,
+      });
       
       if (statusCheck.status !== 'active') {
-        console.error('[Reply] Agent not active:', statusCheck.status);
+        console.error('[Reply] ❌ Agent not active:', statusCheck.status);
         if (statusCheck.status === 'claim_pending') {
           return { success: false, error: '⚠️ Claim not completed. Please complete the claim process on Moltbook first.' };
+        } else if (statusCheck.status === 'error') {
+          return { success: false, error: '❌ Agent status: error. This means the claim is not completed. Please complete the claim process on Moltbook first.' };
         } else {
           return { success: false, error: `⚠️ Agent status: ${statusCheck.status}. Please check Settings.` };
         }
@@ -1254,26 +2041,54 @@ ipcMain.handle('reply-to-post', async (event, { postId, body }) => {
       agent.status = statusCheck.status;
       agent.lastCheckedAt = new Date().toISOString();
       store.saveAgent(agent);
+      console.log('[Reply] ✅ Agent status confirmed as ACTIVE');
+      
+      // ADDITIONAL TEST: Try to fetch the agent's own posts to verify POST permissions
+      console.log('[Reply] Testing API key permissions with agent posts...');
+      try {
+        const testResult = await testApiKeyPermissions(apiKey);
+        console.log('[Reply] API key permissions test:', testResult);
+        if (!testResult.canPost) {
+          console.error('[Reply] ❌ API key lacks POST permissions');
+          return { success: false, error: '❌ API key lacks permission to post. Please re-claim your agent on Moltbook.' };
+        }
+      } catch (testError) {
+        console.warn('[Reply] ⚠️ Could not test API key permissions:', testError.message);
+        // Continue anyway - the test might fail for other reasons
+      }
       
     } catch (statusError) {
-      console.error('[Reply] Status check failed:', statusError.message);
+      console.error('[Reply] ❌ Status check failed:', statusError.message);
+      
       // If it's a Moltbook server error, show that
       if (statusError.message.includes('Moltbook') || statusError.message.includes('timeout') || statusError.message.includes('connect')) {
         return { success: false, error: statusError.message };
       }
-      // Otherwise continue with cached status
-      console.warn('[Reply] Using cached agent status due to status check error');
+      
+      // Check cached status - if not active, don't allow posting
+      if (agent.status !== 'active') {
+        console.error('[Reply] ❌ Cached agent status is not active:', agent.status);
+        return { success: false, error: '❌ Agent status check failed and cached status is not active. Please check Settings and verify your agent is claimed.' };
+      }
+      
+      // Otherwise continue with cached status if it's active
+      console.warn('[Reply] ⚠️ Using cached agent status (active) due to status check error');
     }
 
     const safeMode = store.get('safeMode', true);
+    console.log('[Reply] Safe Mode status:', safeMode);
+    console.log('[Reply] Safe Mode config value:', store.get('safeMode'));
+    
     if (safeMode) {
-      console.error('[Reply] Safe Mode enabled');
+      console.error('[Reply] ❌ Safe Mode is enabled - cannot post replies');
       return { success: false, error: 'Safe Mode is enabled. Disable it in Settings to post replies.' };
     }
+    
+    console.log('[Reply] ✅ Safe Mode is disabled - proceeding with reply');
 
     const https = require('https');
     const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
-    console.log('[Reply] Using API key:', maskApiKey(apiKey));
+    console.log('[Reply] Using API key for POST request:', maskApiKey(apiKey));
 
     const postData = JSON.stringify({ body });
 
@@ -1296,11 +2111,13 @@ ipcMain.handle('reply-to-post', async (event, { postId, body }) => {
         },
       };
 
-      console.log('[Reply] Request options:', {
+      console.log('[Reply] POST Request:', {
         hostname: options.hostname,
         path: options.path,
         method: options.method,
         hasAuth: !!options.headers.Authorization,
+        authPrefix: options.headers.Authorization.substring(0, 20) + '...',
+        contentLength: options.headers['Content-Length'],
       });
 
       const req = https.request(options, (res) => {
@@ -1313,22 +2130,50 @@ ipcMain.handle('reply-to-post', async (event, { postId, body }) => {
 
         res.on('end', () => {
           console.log('[Reply] Response status:', res.statusCode);
-          console.log('[Reply] Response data:', data.substring(0, 500));
+          console.log('[Reply] Response headers:', JSON.stringify(res.headers, null, 2));
+          console.log('[Reply] Response body:', data.substring(0, 500));
           
           if (res.statusCode === 200 || res.statusCode === 201) {
             try {
               const parsed = JSON.parse(data);
-              console.log('[Reply] Successfully posted comment');
+              console.log('[Reply] ✅ Comment posted successfully');
               resolve(parsed);
             } catch (error) {
-              console.error('[Reply] JSON parse error:', error);
+              console.error('[Reply] ❌ JSON parse error:', error);
               reject(new Error('Invalid JSON response'));
             }
           } else if (res.statusCode === 401 || res.statusCode === 403) {
-            console.error('[Reply] Authentication error:', res.statusCode);
-            reject(new Error('⚠️ Authentication failed. Please complete the claim process on Moltbook.'));
+            console.error('[Reply] ❌ Authentication error:', res.statusCode);
+            console.error('[Reply] Response body:', data);
+            console.error('[Reply] This means:');
+            if (res.statusCode === 401) {
+              console.error('[Reply] - API key is invalid or expired');
+              console.error('[Reply] - Agent claim might not be completed');
+              console.error('[Reply] - API key might be corrupted in storage');
+              console.error('[Reply] 💡 SOLUTION: Try resetting agent and re-registering');
+            } else {
+              console.error('[Reply] - API key is valid but lacks permission to post');
+              console.error('[Reply] - Agent might not have comment permissions');
+              console.error('[Reply] 💡 SOLUTION: Complete claim process on Moltbook website');
+            }
+            
+            // Try to provide more specific error message based on response
+            let errorMsg = '⚠️ Authentication failed.';
+            try {
+              const errorData = JSON.parse(data);
+              if (errorData.message) {
+                errorMsg += ` ${errorData.message}`;
+              } else if (errorData.error) {
+                errorMsg += ` ${errorData.error}`;
+              }
+            } catch (e) {
+              // Ignore JSON parse errors
+            }
+            errorMsg += ' Please complete the claim process on Moltbook.';
+            
+            reject(new Error(errorMsg));
           } else {
-            console.error('[Reply] HTTP error:', res.statusCode, data);
+            console.error('[Reply] ❌ HTTP error:', res.statusCode, data);
             reject(new Error(`HTTP ${res.statusCode}: ${data.substring(0, 200)}`));
           }
         });
@@ -1336,7 +2181,7 @@ ipcMain.handle('reply-to-post', async (event, { postId, body }) => {
 
       req.on('error', (error) => {
         clearTimeout(timeout);
-        console.error('[Reply] Request error:', error);
+        console.error('[Reply] ❌ Request error:', error);
         // Better error messages
         if (error.code === 'ECONNREFUSED') {
           reject(new Error('🔌 Cannot connect to Moltbook server. Server might be down.'));
@@ -1352,10 +2197,12 @@ ipcMain.handle('reply-to-post', async (event, { postId, body }) => {
     });
 
     store.audit('comment.posted', { postId, body: body.substring(0, 100) });
-    console.log('[Reply] Comment posted successfully');
+    console.log('[Reply] ✅ Comment posted successfully');
+    console.log('[Reply] ========================================');
     return { success: true, comment: result };
   } catch (error) {
-    console.error('[Reply] Failed to post comment:', error);
+    console.error('[Reply] ❌ Failed to post comment:', error);
+    console.error('[Reply] ========================================');
     store.audit('comment.failed', { postId, error: error.message });
     return { success: false, error: error.message };
   }
@@ -1441,12 +2288,16 @@ ipcMain.handle('delete-post', async (event, postId) => {
 
 ipcMain.handle('get-post-details', async (event, postId) => {
   try {
+    console.log('[PostDetails] 🔍 Fetching post details for ID:', postId);
+    
     const https = require('https');
     
     // Try with authentication first if agent is available
     const agent = store.getAgent();
     const hasAuth = agent && agent.status === 'active';
     
+    console.log('[PostDetails] 🔑 Authentication available:', hasAuth);
+
     const post = await new Promise((resolve, reject) => {
       const options = {
         hostname: 'www.moltbook.com',
@@ -1461,7 +2312,16 @@ ipcMain.handle('get-post-details', async (event, postId) => {
       if (hasAuth) {
         const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
         options.headers['Authorization'] = `Bearer ${apiKey}`;
+        console.log('[PostDetails] 🔐 Using authenticated request');
+      } else {
+        console.log('[PostDetails] 🌐 Using public request');
       }
+
+      console.log('[PostDetails] 📡 Request:', {
+        hostname: options.hostname,
+        path: options.path,
+        hasAuth: !!options.headers.Authorization
+      });
 
       const req = https.request(options, (res) => {
         let data = '';
@@ -1471,28 +2331,95 @@ ipcMain.handle('get-post-details', async (event, postId) => {
         });
 
         res.on('end', () => {
+          console.log('[PostDetails] 📡 Response Status:', res.statusCode);
+          console.log('[PostDetails] 📄 Response Body (first 500 chars):', data.substring(0, 500));
+          
           if (res.statusCode === 200) {
             try {
               const parsed = JSON.parse(data);
-              resolve(parsed);
+              console.log('[PostDetails] 🔍 Parsed Response Structure:', {
+                hasPost: !!parsed.post,
+                hasId: !!parsed.id,
+                hasTitle: !!parsed.title,
+                hasData: !!parsed.data,
+                keys: Object.keys(parsed),
+                fullStructure: JSON.stringify(parsed, null, 2)
+              });
+              
+              // Handle different possible response structures from Moltbook API
+              let actualPost = null;
+              
+              // Structure 1: Direct post object
+              if (parsed.id && (parsed.title || parsed.body)) {
+                actualPost = parsed;
+                console.log('[PostDetails] ✅ Found direct post object');
+              }
+              // Structure 2: Nested post field
+              else if (parsed.post && typeof parsed.post === 'object') {
+                actualPost = parsed.post;
+                console.log('[PostDetails] ✅ Found nested post object');
+              }
+              // Structure 3: Data wrapper
+              else if (parsed.data && (parsed.data.id || parsed.data.title)) {
+                actualPost = parsed.data;
+                console.log('[PostDetails] ✅ Found post in data wrapper');
+              }
+              // Structure 4: Success wrapper with post
+              else if (parsed.success && parsed.post) {
+                actualPost = parsed.post;
+                console.log('[PostDetails] ✅ Found post with success wrapper');
+              }
+              
+              if (actualPost) {
+                console.log('[PostDetails] ✅ Successfully extracted post:', {
+                  id: actualPost.id,
+                  title: actualPost.title?.substring(0, 50) || 'No title',
+                  hasBody: !!actualPost.body,
+                  bodyLength: actualPost.body?.length || 0,
+                  submolt: actualPost.submolt
+                });
+                resolve(actualPost);
+              } else {
+                console.error('[PostDetails] ❌ Could not extract post from response');
+                console.error('[PostDetails] 🔍 Response structure:', JSON.stringify(parsed, null, 2));
+                reject(new Error('Post not found in API response - response structure might have changed'));
+              }
             } catch (error) {
-              reject(new Error('Invalid JSON response'));
+              console.error('[PostDetails] ❌ JSON parse error:', error.message);
+              console.error('[PostDetails] 📄 Raw response:', data.substring(0, 200));
+              reject(new Error('Invalid JSON response from Moltbook API'));
             }
+          } else if (res.statusCode === 404) {
+            console.error('[PostDetails] ❌ Post not found (404)');
+            reject(new Error('Post not found - it might have been deleted or the ID is incorrect'));
+          } else if (res.statusCode === 401 || res.statusCode === 403) {
+            console.error('[PostDetails] ❌ Authentication error:', res.statusCode);
+            reject(new Error('Authentication failed - post might be private or agent not authorized'));
           } else {
-            reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+            console.error('[PostDetails] ❌ HTTP error:', res.statusCode, data.substring(0, 200));
+            reject(new Error(`HTTP ${res.statusCode}: ${data.substring(0, 100)}`));
           }
         });
       });
 
       req.on('error', (error) => {
-        reject(error);
+        console.error('[PostDetails] ❌ Request error:', error);
+        if (error.code === 'ECONNREFUSED') {
+          reject(new Error('Cannot connect to Moltbook server - server might be down'));
+        } else if (error.code === 'ETIMEDOUT' || error.code === 'ESOCKETTIMEDOUT') {
+          reject(new Error('Moltbook server timeout - server is very slow'));
+        } else {
+          reject(new Error(`Network error: ${error.message}`));
+        }
       });
 
       req.end();
     });
 
+    console.log('[PostDetails] ✅ Post fetch completed successfully');
     return { success: true, post };
   } catch (error) {
+    console.error('[PostDetails] ❌ Failed to fetch post:', error.message);
     return { success: false, error: error.message };
   }
 });
@@ -1921,6 +2848,108 @@ async function getOllamaModels() {
 let agentInterval = null;
 let agentRepliesThisHour = 0;
 let agentHourlyResetInterval = null;
+let moltbookHeartbeatInterval = null; // 4-hour heartbeat
+
+// Start Moltbook heartbeat (4-hour cycle)
+function startMoltbookHeartbeat() {
+  // Clear existing heartbeat
+  if (moltbookHeartbeatInterval) {
+    clearInterval(moltbookHeartbeatInterval);
+  }
+  
+  const agent = store.getAgent();
+  if (!agent || agent.status !== 'active') {
+    console.log('[Moltbook] ❌ Cannot start heartbeat - agent not active');
+    return;
+  }
+  
+  // Get heartbeat interval from skill.md or use 4 hours default
+  const heartbeatMs = agent.skillInfo?.heartbeatInterval || (4 * 60 * 60 * 1000);
+  
+  console.log('[Moltbook] ❤️ Starting heartbeat every', heartbeatMs / (60 * 60 * 1000), 'hours');
+  
+  // Run immediately
+  runMoltbookHeartbeat();
+  
+  // Set up recurring heartbeat
+  moltbookHeartbeatInterval = setInterval(() => {
+    runMoltbookHeartbeat();
+  }, heartbeatMs);
+  
+  store.set('moltbookHeartbeatActive', true);
+}
+
+// Stop Moltbook heartbeat
+function stopMoltbookHeartbeat() {
+  if (moltbookHeartbeatInterval) {
+    clearInterval(moltbookHeartbeatInterval);
+    moltbookHeartbeatInterval = null;
+    console.log('[Moltbook] ❤️ Heartbeat stopped');
+  }
+  store.set('moltbookHeartbeatActive', false);
+}
+
+// Run Moltbook heartbeat cycle
+async function runMoltbookHeartbeat() {
+  try {
+    console.log('[Moltbook] ❤️ ========================================');
+    console.log('[Moltbook] ❤️ HEARTBEAT CYCLE STARTING');
+    console.log('[Moltbook] ❤️ ========================================');
+    
+    const agent = store.getAgent();
+    if (!agent || agent.status !== 'active') {
+      console.error('[Moltbook] ❌ Agent not active, skipping heartbeat');
+      return;
+    }
+    
+    // Update last heartbeat time
+    store.set('moltbookLastHeartbeat', new Date().toISOString());
+    
+    // 1. Refresh skill.md knowledge
+    console.log('[Moltbook] 📚 Refreshing skill.md knowledge...');
+    try {
+      const skillInfo = await fetchAndParseMoltbookSkill();
+      
+      // Update agent with new skill info
+      agent.skillInfo = skillInfo;
+      agent.skillUpdatedAt = new Date().toISOString();
+      store.saveAgent(agent);
+      
+      console.log('[Moltbook] ✅ Skill knowledge updated');
+    } catch (error) {
+      console.warn('[Moltbook] ⚠️ Could not update skill knowledge:', error.message);
+    }
+    
+    // 2. Check agent status
+    console.log('[Moltbook] 🔍 Checking agent status...');
+    try {
+      const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+      const statusResult = await checkMoltbookStatus(apiKey);
+      
+      if (statusResult.status === 'active') {
+        console.log('[Moltbook] ✅ Agent status confirmed active');
+      } else {
+        console.error('[Moltbook] ❌ Agent status changed to:', statusResult.status);
+        return; // Don't continue if agent not active
+      }
+    } catch (error) {
+      console.error('[Moltbook] ❌ Status check failed:', error.message);
+      return;
+    }
+    
+    // 3. Run agent loop (browse, engage, post)
+    console.log('[Moltbook] 🤖 Running agent engagement cycle...');
+    await runAgentLoop();
+    
+    console.log('[Moltbook] ❤️ ========================================');
+    console.log('[Moltbook] ❤️ HEARTBEAT CYCLE COMPLETED');
+    console.log('[Moltbook] ❤️ Next heartbeat in', (agent.skillInfo?.heartbeatInterval || (4 * 60 * 60 * 1000)) / (60 * 60 * 1000), 'hours');
+    console.log('[Moltbook] ❤️ ========================================');
+    
+  } catch (error) {
+    console.error('[Moltbook] ❤️ Heartbeat cycle failed:', error);
+  }
+}
 
 // Fetch Moltbook feed
 async function fetchMoltbookFeed(apiKey) {
@@ -1971,10 +3000,92 @@ async function fetchMoltbookFeed(apiKey) {
   });
 }
 
+// Alternative feed fetching method - try different endpoints
+async function fetchMoltbookFeedAlternative(apiKey) {
+  const https = require('https');
+  
+  // Try different possible endpoints
+  const endpoints = [
+    '/api/v1/posts',           // Get recent posts
+    '/api/v1/posts/recent',    // Alternative recent posts
+    '/api/v1/submolts/all/posts', // All submolts posts
+  ];
+  
+  for (const endpoint of endpoints) {
+    console.log('[AI] 🔄 Trying endpoint:', endpoint);
+    
+    try {
+      const url = `${MOLTBOOK_BASE_URL}${endpoint}`;
+      
+      const result = await new Promise((resolve, reject) => {
+        const options = {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'User-Agent': 'WATAM-AI/1.2.0',
+          },
+          maxRedirects: 0,
+        };
+
+        const req = https.request(url, options, (res) => {
+          let data = '';
+
+          if (res.statusCode === 301 || res.statusCode === 302) {
+            reject(new Error('Redirect detected'));
+            return;
+          }
+
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
+
+          res.on('end', () => {
+            console.log('[AI] 📡 Endpoint', endpoint, 'returned status:', res.statusCode);
+            
+            if (res.statusCode === 200) {
+              try {
+                const parsed = JSON.parse(data);
+                console.log('[AI] ✅ Endpoint', endpoint, 'worked, got data');
+                
+                // Normalize the response format
+                if (Array.isArray(parsed)) {
+                  resolve({ posts: parsed });
+                } else if (parsed.posts) {
+                  resolve(parsed);
+                } else if (parsed.data) {
+                  resolve({ posts: parsed.data });
+                } else {
+                  resolve({ posts: [parsed] });
+                }
+              } catch (error) {
+                reject(new Error('Invalid JSON response'));
+              }
+            } else {
+              reject(new Error(`HTTP ${res.statusCode}: ${data.substring(0, 200)}`));
+            }
+          });
+        });
+
+        req.on('error', (error) => {
+          reject(error);
+        });
+
+        req.end();
+      });
+      
+      return result;
+    } catch (error) {
+      console.log('[AI] ❌ Endpoint', endpoint, 'failed:', error.message);
+      continue;
+    }
+  }
+  
+  throw new Error('All feed endpoints failed');
+}
+
 // Post reply to Moltbook
 async function postMoltbookReply(apiKey, postId, replyText) {
   const https = require('https');
-  const url = `${MOLTBOOK_BASE_URL}/api/v1/posts/${postId}/replies`;
 
   return new Promise((resolve, reject) => {
     const postData = JSON.stringify({
@@ -1982,6 +3093,8 @@ async function postMoltbookReply(apiKey, postId, replyText) {
     });
 
     const options = {
+      hostname: 'www.moltbook.com',
+      path: `/api/v1/posts/${postId}/comments`,
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -1989,22 +3102,17 @@ async function postMoltbookReply(apiKey, postId, replyText) {
         'Content-Length': Buffer.byteLength(postData),
         'User-Agent': 'WATAM-AI/1.2.0',
       },
-      maxRedirects: 0,
     };
 
-    const req = https.request(url, options, (res) => {
+    const req = https.request(options, (res) => {
       let data = '';
-
-      if (res.statusCode === 301 || res.statusCode === 302) {
-        reject(new Error('Redirect detected'));
-        return;
-      }
 
       res.on('data', (chunk) => {
         data += chunk;
       });
 
       res.on('end', () => {
+        console.log('[AI] Post reply response:', res.statusCode, data.substring(0, 200));
         if (res.statusCode === 200 || res.statusCode === 201) {
           try {
             const result = JSON.parse(data);
@@ -2012,13 +3120,16 @@ async function postMoltbookReply(apiKey, postId, replyText) {
           } catch (error) {
             reject(new Error('Invalid JSON response'));
           }
+        } else if (res.statusCode === 401 || res.statusCode === 403) {
+          reject(new Error('⚠️ Authentication failed. Please complete the claim process on Moltbook.'));
         } else {
-          reject(new Error(`Failed to post reply: ${res.statusCode} - ${data}`));
+          reject(new Error(`Failed to post reply: HTTP ${res.statusCode}`));
         }
       });
     });
 
     req.on('error', (error) => {
+      console.error('[AI] Post reply error:', error);
       reject(error);
     });
 
@@ -2030,10 +3141,13 @@ async function postMoltbookReply(apiKey, postId, replyText) {
 // Agent loop logic
 async function runAgentLoop() {
   try {
-    console.log('[AI] Agent loop tick - checking feed...');
+    console.log('[AI] ========================================');
+    console.log('[AI] 🤖 AGENT LOOP STARTING - Checking feed...');
+    console.log('[AI] ========================================');
     
     // Update last check time
     store.set('agentLastCheck', new Date().toISOString());
+    console.log('[AI] ✅ Updated last check time');
     
     // Get config
     const config = {
@@ -2050,30 +3164,65 @@ async function runAgentLoop() {
       avoidRepetition: store.get('avoidRepetition', true),
     };
     
+    console.log('[AI] 📋 Agent config:', {
+      provider: config.aiProvider,
+      hasApiKey: !!config.aiApiKey,
+      model: config.aiModel,
+      submolts: config.replySubmolts,
+      keywords: config.replyKeywords,
+      maxPerHour: config.maxRepliesPerHour,
+    });
+    
     // Check rate limit
     if (agentRepliesThisHour >= config.maxRepliesPerHour) {
-      console.log('[AI] Rate limit reached:', agentRepliesThisHour, '/', config.maxRepliesPerHour);
+      console.log('[AI] ⏱️ Rate limit reached:', agentRepliesThisHour, '/', config.maxRepliesPerHour);
       store.audit('ai.agent_rate_limited', { count: agentRepliesThisHour });
       return;
     }
     
     // Get agent
     const agent = store.getAgent();
-    if (!agent || agent.status !== 'active') {
-      console.log('[AI] Agent not active, skipping loop');
+    if (!agent) {
+      console.error('[AI] ❌ No agent registered');
       return;
     }
+    
+    if (agent.status !== 'active') {
+      console.error('[AI] ❌ Agent not active, status:', agent.status);
+      return;
+    }
+    
+    console.log('[AI] ✅ Agent is active:', agent.name);
     
     // Fetch feed
     const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
-    const feed = await fetchMoltbookFeed(apiKey);
+    console.log('[AI] 🔑 Using API key:', maskApiKey(apiKey));
+    console.log('[AI] 📡 Fetching Moltbook feed...');
+    
+    let feed;
+    try {
+      feed = await fetchMoltbookFeed(apiKey);
+      console.log('[AI] ✅ Feed fetched successfully');
+    } catch (error) {
+      console.error('[AI] ❌ Failed to fetch feed:', error.message);
+      
+      // Try alternative feed endpoints
+      console.log('[AI] 🔄 Trying alternative feed methods...');
+      try {
+        feed = await fetchMoltbookFeedAlternative(apiKey);
+        console.log('[AI] ✅ Alternative feed method worked');
+      } catch (altError) {
+        console.error('[AI] ❌ All feed methods failed:', altError.message);
+        return;
+      }
+    }
     
     if (!feed || !feed.posts || feed.posts.length === 0) {
-      console.log('[AI] No posts in feed');
+      console.log('[AI] ⚠️ No posts in feed');
       return;
     }
     
-    console.log('[AI] Fetched', feed.posts.length, 'posts from feed');
+    console.log('[AI] 📊 Fetched', feed.posts.length, 'posts from feed');
     
     // Filter posts by submolts
     let filteredPosts = feed.posts;
@@ -2296,16 +3445,22 @@ ipcMain.handle('start-agent', async () => {
     store.set('agentRunning', true);
     store.audit('ai.agent_started', { provider: config.aiProvider, model: config.aiModel });
     
+    // Start Moltbook heartbeat system (4-hour cycle)
+    console.log('[AI] 🚀 Starting Moltbook heartbeat system...');
+    startMoltbookHeartbeat();
+    
+    // Also start traditional agent loop for more frequent checks
+    const intervalMs = config.checkInterval * 60 * 1000; // Convert minutes to ms
+    console.log('[AI] 🔄 Starting frequent agent loop with interval:', intervalMs, 'ms');
+    
     // Run immediately on start
     runAgentLoop();
     
-    // Start agent loop
-    const intervalMs = config.checkInterval * 60 * 1000; // Convert minutes to ms
-    console.log('[AI] Starting agent loop with interval:', intervalMs, 'ms');
-    
     agentInterval = setInterval(runAgentLoop, intervalMs);
     
-    console.log('[AI] Agent started successfully');
+    console.log('[AI] ✅ Agent started successfully with dual system:');
+    console.log('[AI] - Heartbeat: Every 4 hours (Moltbook standard)');
+    console.log('[AI] - Quick checks: Every', config.checkInterval, 'minutes');
     return { success: true };
   } catch (error) {
     console.error('[AI] Failed to start agent:', error);
@@ -2330,6 +3485,10 @@ ipcMain.handle('stop-agent', async () => {
       agentHourlyResetInterval = null;
       console.log('[AI] Hourly reset interval cleared');
     }
+    
+    // Stop Moltbook heartbeat
+    console.log('[AI] 🛑 Stopping Moltbook heartbeat system...');
+    stopMoltbookHeartbeat();
     
     // Reset counter
     agentRepliesThisHour = 0;

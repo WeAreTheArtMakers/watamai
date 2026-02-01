@@ -119,8 +119,12 @@ async function loadAIConfig() {
       document.getElementById('customEndpoint').value = config.customEndpoint;
     }
     
-    // Auto-reply settings
-    document.getElementById('autoReplyEnabled').checked = config.autoReplyEnabled || false;
+    // Auto-reply settings - CRITICAL: Use strict boolean check
+    const autoReplyCheckbox = document.getElementById('autoReplyEnabled');
+    if (autoReplyCheckbox) {
+      autoReplyCheckbox.checked = config.autoReplyEnabled === true;
+      console.log('[AI] Auto-reply checkbox set to:', autoReplyCheckbox.checked);
+    }
     document.getElementById('checkInterval').value = config.checkInterval || 5;
     document.getElementById('replySubmolts').value = config.replySubmolts || '';
     document.getElementById('replyKeywords').value = config.replyKeywords || '';
@@ -188,6 +192,18 @@ function setupAIEventListeners() {
   
   // Test reply
   document.getElementById('testReplyBtn').onclick = testReply;
+  
+  // Test Moltbook connection
+  document.getElementById('testConnectionBtn').onclick = testMoltbookConnection;
+  
+  // Test agent loop
+  document.getElementById('testAgentLoopBtn').onclick = testAgentLoop;
+  
+  // Test heartbeat
+  document.getElementById('testHeartbeatBtn').onclick = testHeartbeat;
+  
+  // Debug and fix issues
+  document.getElementById('debugAndFixBtn').onclick = debugAndFixIssues;
   
   // Manual reply to URL
   document.getElementById('sendManualReplyBtn').onclick = sendManualReply;
@@ -340,7 +356,7 @@ async function saveAutoReplySettings() {
   
   try {
     const result = await window.electronAPI.saveConfig({
-      autoReplyEnabled,
+      autoReplyEnabled: autoReplyEnabled, // Explicit boolean
       checkInterval,
       replySubmolts,
       replyKeywords,
@@ -350,7 +366,21 @@ async function saveAutoReplySettings() {
     if (result.success) {
       showAIStatus('✅ Auto-reply settings saved!', 'success');
       console.log('[AI] Auto-reply settings saved successfully');
-      updateAgentStatus();
+      
+      // Force reload config to verify
+      setTimeout(async () => {
+        const config = await window.electronAPI.getConfig();
+        console.log('[AI] Verified auto-reply enabled:', config.autoReplyEnabled);
+        
+        // Update checkbox to match saved value
+        const checkbox = document.getElementById('autoReplyEnabled');
+        if (checkbox.checked !== config.autoReplyEnabled) {
+          console.warn('[AI] WARNING: Checkbox state mismatch! Fixing...');
+          checkbox.checked = config.autoReplyEnabled === true;
+        }
+        
+        updateAgentStatus();
+      }, 500);
     } else {
       showAIStatus('❌ Failed to save settings', 'error');
       console.error('[AI] Failed to save auto-reply settings');
@@ -425,8 +455,17 @@ async function startAgent() {
   }
   
   if (!config.autoReplyEnabled) {
-    showAIStatus('❌ Please enable auto-reply first', 'error');
-    console.error('[AI] Auto-reply not enabled');
+    showAIStatus('❌ Please enable auto-reply first. Check the "Enable Auto-Reply" checkbox and click "Save Auto-Reply Settings".', 'error');
+    console.error('[AI] Auto-reply not enabled. Current value:', config.autoReplyEnabled);
+    
+    // Highlight the checkbox
+    const checkbox = document.getElementById('autoReplyEnabled');
+    if (checkbox && !checkbox.checked) {
+      checkbox.parentElement.style.border = '2px solid #ef4444';
+      setTimeout(() => {
+        checkbox.parentElement.style.border = '';
+      }, 3000);
+    }
     return;
   }
   
@@ -538,9 +577,319 @@ async function testReply() {
   }
 }
 
+// Test Moltbook connection comprehensively
+async function testMoltbookConnection() {
+  console.log('[AI] 🧪 Test Moltbook Connection button clicked');
+  
+  showAIStatus('🔍 Running comprehensive connection test...', 'info');
+  
+  try {
+    const result = await window.electronAPI.testMoltbookConnection();
+    
+    if (result.success) {
+      const { results } = result;
+      
+      console.log('=== COMPREHENSIVE MOLTBOOK CONNECTION TEST RESULTS ===');
+      console.log('API Key Format:', results.apiKeyFormat);
+      console.log('Agent Status:', results.agentStatus);
+      console.log('Agent Permissions:', results.agentPosts);
+      console.log('Direct API Test:', results.testPost);
+      console.log('Safe Mode:', results.safeMode);
+      console.log('Recommendations:', results.recommendations);
+      console.log('=== END TEST RESULTS ===');
+      
+      // Show detailed summary
+      let message = '🔍 Comprehensive Connection Test Results:\n\n';
+      
+      // API Key Format
+      if (results.apiKeyFormat) {
+        message += `🔑 API Key Format: ${results.apiKeyFormat.valid ? '✅ Valid' : '❌ Invalid'}\n`;
+        if (!results.apiKeyFormat.valid) {
+          message += `   Error: ${results.apiKeyFormat.error}\n`;
+        }
+      }
+      
+      // Agent Status
+      message += `👤 Agent Status: ${results.agentStatus?.success ? '✅ Connected' : '❌ Failed'}\n`;
+      if (results.agentStatus?.success) {
+        message += `   Status: ${results.agentStatus.status}\n`;
+        message += `   HTTP Code: ${results.agentStatus.statusCode}\n`;
+      } else if (results.agentStatus?.error) {
+        message += `   Error: ${results.agentStatus.error}\n`;
+      }
+      
+      // Permissions
+      message += `🔐 API Permissions: ${results.agentPosts?.canPost ? '✅ Can Post' : '❌ Cannot Post'}\n`;
+      if (results.agentPosts?.error) {
+        message += `   Error: ${results.agentPosts.error}\n`;
+      }
+      
+      // Safe Mode
+      message += `🔒 Safe Mode: ${results.safeMode ? '🔒 ENABLED (blocks posting)' : '🔓 DISABLED'}\n`;
+      
+      // Recommendations
+      if (results.recommendations && results.recommendations.length > 0) {
+        message += '\n💡 Recommendations:\n';
+        results.recommendations.forEach((rec, i) => {
+          message += `   ${i + 1}. ${rec}\n`;
+        });
+      }
+      
+      // Determine overall status
+      const isWorking = results.apiKeyFormat?.valid && 
+                       results.agentStatus?.success && 
+                       results.agentStatus?.status === 'active' &&
+                       results.agentPosts?.canPost;
+      
+      if (isWorking && !results.safeMode) {
+        message += '\n✅ DIAGNOSIS: Everything looks good! Agent should work properly.';
+        showAIStatus(message, 'success');
+      } else if (isWorking && results.safeMode) {
+        message += '\n⚠️ DIAGNOSIS: API is working but Safe Mode is blocking posts. Disable Safe Mode in Settings.';
+        showAIStatus(message, 'warning');
+      } else {
+        message += '\n❌ DIAGNOSIS: Issues found that prevent the agent from working properly.';
+        showAIStatus(message, 'error');
+      }
+      
+      // Show notification
+      if (window.showNotification) {
+        window.showNotification('Comprehensive connection test completed! Check console and status for details.', 'info');
+      }
+    } else {
+      showAIStatus('❌ Connection test failed: ' + result.error, 'error');
+      console.error('[AI] Connection test error:', result.error);
+    }
+  } catch (error) {
+    showAIStatus('❌ Error: ' + error.message, 'error');
+    console.error('[AI] Connection test exception:', error);
+  }
+}
+
+// Test agent loop manually
+async function testAgentLoop() {
+  console.log('[AI] Test Agent Loop button clicked');
+  
+  showAIStatus('🤖 Testing agent loop...', 'info');
+  
+  try {
+    const result = await window.electronAPI.testAgentLoop();
+    
+    if (result.success) {
+      showAIStatus('✅ Agent loop test completed! Check console for details.', 'success');
+      console.log('[AI] ✅ Agent loop test result:', result.message);
+      
+      // Show notification
+      if (window.showNotification) {
+        window.showNotification('Agent loop test completed! Check console for details.', 'info');
+      }
+    } else {
+      showAIStatus('❌ Agent loop test failed: ' + result.error, 'error');
+      console.error('[AI] ❌ Agent loop test error:', result.error);
+    }
+  } catch (error) {
+    showAIStatus('❌ Error: ' + error.message, 'error');
+    console.error('[AI] ❌ Agent loop test exception:', error);
+  }
+}
+
+// Test heartbeat manually
+async function testHeartbeat() {
+  console.log('[AI] Test Heartbeat button clicked');
+  
+  showAIStatus('❤️ Testing Moltbook heartbeat...', 'info');
+  
+  try {
+    const result = await window.electronAPI.testHeartbeat();
+    
+    if (result.success) {
+      showAIStatus('✅ Heartbeat test completed! Check console for details.', 'success');
+      console.log('[AI] ✅ Heartbeat test result:', result.message);
+      
+      // Show notification
+      if (window.showNotification) {
+        window.showNotification('Heartbeat test completed! Check console for details.', 'info');
+      }
+    } else {
+      showAIStatus('❌ Heartbeat test failed: ' + result.error, 'error');
+      console.error('[AI] ❌ Heartbeat test error:', result.error);
+    }
+  } catch (error) {
+    showAIStatus('❌ Error: ' + error.message, 'error');
+    console.error('[AI] ❌ Heartbeat test exception:', error);
+  }
+}
+
+// Debug and fix common issues automatically
+async function debugAndFixIssues() {
+  console.log('[AI] 🔧 Debug & Fix Issues button clicked');
+  
+  showAIStatus('🔧 Running diagnostic and attempting automatic fixes...', 'info');
+  
+  try {
+    console.log('[Debug] ========================================');
+    console.log('[Debug] 🔧 AUTOMATIC ISSUE DIAGNOSIS & FIXING');
+    console.log('[Debug] ========================================');
+    
+    let fixesApplied = [];
+    let issuesFound = [];
+    
+    // Step 1: Test current connection
+    console.log('[Debug] 1️⃣ Testing current connection...');
+    const testResult = await window.electronAPI.testMoltbookConnection();
+    
+    if (!testResult.success) {
+      issuesFound.push('Connection test failed');
+      showAIStatus('❌ Connection test failed: ' + testResult.error, 'error');
+      return;
+    }
+    
+    const { results } = testResult;
+    
+    // Step 2: Check API key format
+    if (!results.apiKeyFormat?.valid) {
+      issuesFound.push('Invalid API key format');
+      console.log('[Debug] ❌ API key format invalid - need to re-register');
+      
+      // Offer to reset and re-register
+      if (confirm('API key appears to be corrupted. Reset agent and re-register?')) {
+        console.log('[Debug] 🔄 Resetting agent...');
+        const resetResult = await window.electronAPI.moltbookResetAgent();
+        if (resetResult.success) {
+          fixesApplied.push('Reset corrupted agent');
+          showAIStatus('✅ Agent reset. Please go to Settings to re-register.', 'success');
+          return;
+        }
+      }
+    }
+    
+    // Step 3: Check agent status
+    if (!results.agentStatus?.success || results.agentStatus?.status !== 'active') {
+      issuesFound.push('Agent not active');
+      console.log('[Debug] ❌ Agent not active - status:', results.agentStatus?.status);
+      
+      if (results.agentStatus?.status === 'error') {
+        if (confirm('Agent claim not completed. Open Moltbook website to complete claim?')) {
+          // Get claim URL from agent data
+          const agentResult = await window.electronAPI.moltbookGetAgent();
+          if (agentResult.success && agentResult.agent?.claimUrl) {
+            window.electronAPI.openExternal(agentResult.agent.claimUrl);
+            fixesApplied.push('Opened claim URL');
+          } else {
+            window.electronAPI.openExternal('https://www.moltbook.com/agents');
+            fixesApplied.push('Opened Moltbook agents page');
+          }
+        }
+      }
+    }
+    
+    // Step 4: Check permissions
+    if (!results.agentPosts?.canPost) {
+      issuesFound.push('API key lacks posting permissions');
+      console.log('[Debug] ❌ API key lacks posting permissions');
+      
+      if (confirm('API key lacks permissions. This usually means claim not completed. Open Moltbook website?')) {
+        window.electronAPI.openExternal('https://www.moltbook.com/agents');
+        fixesApplied.push('Opened Moltbook agents page for claim completion');
+      }
+    }
+    
+    // Step 5: Check Safe Mode
+    if (results.safeMode) {
+      issuesFound.push('Safe Mode is blocking posts');
+      console.log('[Debug] ⚠️ Safe Mode is enabled');
+      
+      if (confirm('Safe Mode is enabled and blocking posts. Disable Safe Mode?')) {
+        const configResult = await window.electronAPI.saveConfig({ safeMode: false });
+        if (configResult.success) {
+          fixesApplied.push('Disabled Safe Mode');
+          console.log('[Debug] ✅ Safe Mode disabled');
+        }
+      }
+    }
+    
+    // Step 6: Check auto-reply settings
+    const config = await window.electronAPI.getConfig();
+    if (!config.autoReplyEnabled) {
+      issuesFound.push('Auto-reply not enabled');
+      console.log('[Debug] ⚠️ Auto-reply not enabled');
+      
+      if (confirm('Auto-reply is not enabled. Enable it now?')) {
+        const autoReplyResult = await window.electronAPI.saveConfig({ autoReplyEnabled: true });
+        if (autoReplyResult.success) {
+          fixesApplied.push('Enabled auto-reply');
+          console.log('[Debug] ✅ Auto-reply enabled');
+          
+          // Update the checkbox
+          const checkbox = document.getElementById('autoReplyEnabled');
+          if (checkbox) {
+            checkbox.checked = true;
+          }
+        }
+      }
+    }
+    
+    // Step 7: Try to refresh skill.md knowledge
+    console.log('[Debug] 7️⃣ Refreshing skill.md knowledge...');
+    try {
+      const skillResult = await window.electronAPI.moltbookFetchSkillDoc();
+      if (skillResult.success) {
+        fixesApplied.push('Refreshed skill.md knowledge');
+        console.log('[Debug] ✅ skill.md refreshed');
+      }
+    } catch (error) {
+      console.log('[Debug] ⚠️ Could not refresh skill.md:', error.message);
+    }
+    
+    // Summary
+    console.log('[Debug] ========================================');
+    console.log('[Debug] 🔧 DIAGNOSIS COMPLETE');
+    console.log('[Debug] Issues Found:', issuesFound);
+    console.log('[Debug] Fixes Applied:', fixesApplied);
+    console.log('[Debug] ========================================');
+    
+    let summaryMessage = '🔧 Diagnostic Complete!\n\n';
+    
+    if (issuesFound.length === 0) {
+      summaryMessage += '✅ No issues found! Your agent should be working properly.\n\n';
+      summaryMessage += 'If you\'re still having problems:\n';
+      summaryMessage += '1. Try the "Test Connection" button\n';
+      summaryMessage += '2. Check the console logs for errors\n';
+      summaryMessage += '3. Restart the application';
+    } else {
+      summaryMessage += `❌ Found ${issuesFound.length} issue(s):\n`;
+      issuesFound.forEach((issue, i) => {
+        summaryMessage += `${i + 1}. ${issue}\n`;
+      });
+      
+      if (fixesApplied.length > 0) {
+        summaryMessage += `\n✅ Applied ${fixesApplied.length} fix(es):\n`;
+        fixesApplied.forEach((fix, i) => {
+          summaryMessage += `${i + 1}. ${fix}\n`;
+        });
+        summaryMessage += '\nPlease test your agent again!';
+      } else {
+        summaryMessage += '\n⚠️ No automatic fixes could be applied.';
+        summaryMessage += '\nPlease follow the recommendations above.';
+      }
+    }
+    
+    showAIStatus(summaryMessage, fixesApplied.length > 0 ? 'success' : 'warning');
+    
+    // Show notification
+    if (window.showNotification) {
+      window.showNotification(`Diagnostic complete! Found ${issuesFound.length} issues, applied ${fixesApplied.length} fixes.`, 'info');
+    }
+    
+  } catch (error) {
+    showAIStatus('❌ Diagnostic failed: ' + error.message, 'error');
+    console.error('[Debug] ❌ Diagnostic error:', error);
+  }
+}
+
 // Send manual reply to specific post URL
 async function sendManualReply() {
-  console.log('[AI] Send Manual Reply button clicked');
+  console.log('[AI] 🚀 Send Manual Reply button clicked');
   
   const url = document.getElementById('manualReplyUrl').value.trim();
   
@@ -553,12 +902,12 @@ async function sendManualReply() {
   // Format: https://www.moltbook.com/post/{POST_ID}
   const match = url.match(/\/post\/([a-f0-9-]+)/i);
   if (!match) {
-    showManualReplyStatus('❌ Invalid post URL format', 'error');
+    showManualReplyStatus('❌ Invalid post URL format. Expected: https://www.moltbook.com/post/{POST_ID}', 'error');
     return;
   }
   
   const postId = match[1];
-  console.log('[AI] Extracted post ID:', postId);
+  console.log('[AI] 📝 Extracted post ID:', postId);
   
   // Check config
   const config = await window.electronAPI.getConfig();
@@ -573,43 +922,112 @@ async function sendManualReply() {
     return;
   }
   
-  showManualReplyStatus('🔄 Fetching post...', 'info');
+  console.log('[AI] ✅ Configuration validated');
+  showManualReplyStatus('🔄 Fetching post details...', 'info');
   
   try {
-    // Fetch post details
+    // Fetch post details with enhanced logging
+    console.log('[AI] 📡 Calling getPostDetails for ID:', postId);
     const postResult = await window.electronAPI.getPostDetails(postId);
     
+    console.log('[AI] 📋 Post fetch result:', {
+      success: postResult.success,
+      hasPost: !!postResult.post,
+      error: postResult.error,
+      postKeys: postResult.post ? Object.keys(postResult.post) : 'no post'
+    });
+    
+    // CRITICAL: Check both success flag AND post existence
     if (!postResult.success) {
-      showManualReplyStatus('❌ Failed to fetch post: ' + postResult.error, 'error');
+      console.error('[AI] ❌ Post fetch failed - success=false');
+      console.error('[AI] 📄 Error details:', postResult.error);
+      showManualReplyStatus('❌ Failed to fetch post: ' + (postResult.error || 'Unknown error'), 'error');
       return;
     }
     
-    const post = postResult.post;
-    console.log('[AI] Fetched post:', post.title);
+    if (!postResult.post) {
+      console.error('[AI] ❌ Post fetch failed - post is null/undefined');
+      console.error('[AI] 📄 Full result:', JSON.stringify(postResult, null, 2));
+      showManualReplyStatus('❌ Post not found or empty response from server', 'error');
+      return;
+    }
+    
+    const actualPost = postResult.post;
+    
+    console.log('[AI] 🔍 Post validation:', {
+      hasId: !!actualPost.id,
+      hasTitle: !!actualPost.title,
+      hasBody: !!actualPost.body,
+      titleLength: actualPost.title?.length || 0,
+      bodyLength: actualPost.body?.length || 0,
+      submolt: actualPost.submolt
+    });
+    
+    // Validate post has content
+    if (!actualPost.id) {
+      console.error('[AI] ❌ Post has no ID');
+      showManualReplyStatus('❌ Invalid post - missing ID', 'error');
+      return;
+    }
+    
+    if (!actualPost.title && !actualPost.body) {
+      console.error('[AI] ❌ Post has no title or body');
+      console.error('[AI] 📄 Post data:', JSON.stringify(actualPost, null, 2));
+      showManualReplyStatus('❌ Post has no content to reply to', 'error');
+      return;
+    }
+    
+    const postTitle = actualPost.title || actualPost.body?.substring(0, 50) || 'Untitled';
+    console.log('[AI] ✅ Post validated successfully:', postTitle);
     
     showManualReplyStatus('🤖 Generating AI reply...', 'info');
     
-    // Generate reply
-    const replyResult = await window.electronAPI.generateReply({ post });
+    // Generate reply with enhanced logging
+    console.log('[AI] 🧠 Calling generateReply...');
+    const replyResult = await window.electronAPI.generateReply({ post: actualPost });
+    
+    console.log('[AI] 📝 Reply generation result:', {
+      success: replyResult.success,
+      hasReply: !!replyResult.reply,
+      replyLength: replyResult.reply?.length || 0,
+      error: replyResult.error
+    });
     
     if (!replyResult.success) {
-      showManualReplyStatus('❌ Failed to generate reply: ' + replyResult.error, 'error');
+      console.error('[AI] ❌ Reply generation failed - success=false');
+      console.error('[AI] 📄 Error details:', replyResult.error);
+      showManualReplyStatus('❌ Failed to generate reply: ' + (replyResult.error || 'Unknown error'), 'error');
       return;
     }
     
-    console.log('[AI] Generated reply:', replyResult.reply.substring(0, 100));
+    if (!replyResult.reply) {
+      console.error('[AI] ❌ Reply generation failed - reply is null/undefined');
+      console.error('[AI] 📄 Full result:', JSON.stringify(replyResult, null, 2));
+      showManualReplyStatus('❌ No reply generated - AI response was empty', 'error');
+      return;
+    }
     
-    showManualReplyStatus('📤 Posting reply...', 'info');
+    console.log('[AI] ✅ Reply generated successfully:', replyResult.reply.substring(0, 100) + '...');
     
-    // Post reply
+    showManualReplyStatus('📤 Posting reply to Moltbook...', 'info');
+    
+    // Post reply with enhanced logging
+    console.log('[AI] 📤 Calling replyToPost...');
     const postReplyResult = await window.electronAPI.replyToPost({
       postId,
       body: replyResult.reply,
     });
     
+    console.log('[AI] 📋 Reply posting result:', {
+      success: postReplyResult.success,
+      error: postReplyResult.error,
+      hasComment: !!postReplyResult.comment
+    });
+    
     if (postReplyResult.success) {
+      console.log('[AI] ✅ Reply posted successfully!');
       showManualReplyStatus('✅ Reply posted successfully!', 'success');
-      logActivity(`Manual reply sent to post: ${post.title}`);
+      logActivity(`Manual reply sent to post: ${postTitle}`);
       
       // Clear URL field
       document.getElementById('manualReplyUrl').value = '';
@@ -619,12 +1037,14 @@ async function sendManualReply() {
         window.showNotification('AI reply posted successfully!', 'success');
       }
     } else {
+      console.error('[AI] ❌ Reply posting failed');
+      console.error('[AI] 📄 Error details:', postReplyResult.error);
       showManualReplyStatus('❌ Failed to post reply: ' + postReplyResult.error, 'error');
     }
     
   } catch (error) {
+    console.error('[AI] ❌ Manual reply process failed with exception:', error);
     showManualReplyStatus('❌ Error: ' + error.message, 'error');
-    console.error('[AI] Manual reply error:', error);
   }
 }
 
@@ -669,22 +1089,42 @@ async function updateAgentStatus() {
     aiProviderStatus.style.color = '#ef4444';
   }
   
-  // Last check time
+  // Last check time - show both quick check and heartbeat
   const lastCheckStatus = document.getElementById('lastCheckStatus');
   const lastCheck = config.agentLastCheck;
-  if (lastCheck) {
-    const date = new Date(lastCheck);
+  const lastHeartbeat = config.moltbookLastHeartbeat;
+  
+  if (lastCheck || lastHeartbeat) {
+    const checkDate = lastCheck ? new Date(lastCheck) : null;
+    const heartbeatDate = lastHeartbeat ? new Date(lastHeartbeat) : null;
     const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
     
-    if (diffMins < 1) {
-      lastCheckStatus.textContent = 'Just now';
-    } else if (diffMins < 60) {
-      lastCheckStatus.textContent = `${diffMins} min ago`;
-    } else {
-      lastCheckStatus.textContent = date.toLocaleTimeString();
+    let displayText = '';
+    
+    if (checkDate) {
+      const diffMs = now - checkDate;
+      const diffMins = Math.floor(diffMs / 60000);
+      
+      if (diffMins < 1) {
+        displayText = 'Just now';
+      } else if (diffMins < 60) {
+        displayText = `${diffMins} min ago`;
+      } else {
+        displayText = checkDate.toLocaleTimeString();
+      }
     }
+    
+    // Add heartbeat info if available
+    if (heartbeatDate) {
+      const heartbeatDiffHours = Math.floor((now - heartbeatDate) / (60 * 60 * 1000));
+      if (heartbeatDiffHours < 1) {
+        displayText += ' (❤️ <1h)';
+      } else {
+        displayText += ` (❤️ ${heartbeatDiffHours}h)`;
+      }
+    }
+    
+    lastCheckStatus.textContent = displayText;
   } else {
     lastCheckStatus.textContent = 'Never';
   }

@@ -1,6 +1,6 @@
 {
   "name": "watamai-desktop",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "WATAM AI Desktop - Socially intelligent Moltbook agent",
   "main": "main.js",
   "scripts": {

@@ -1,12 +1,14 @@
 // Settings Page Logic
 
 let currentAgent = null;
+let identityStatus = null;
 
 // Initialize settings page
 async function initSettings() {
   console.log('[Settings] Initializing settings page...');
   await loadAgent();
   await loadConfig();
+  await loadIdentityStatus(); // NEW: Load identity status
   setupEventListeners();
   console.log('[Settings] Settings page initialized successfully');
 }
@@ -117,7 +119,10 @@ function setupEventListeners() {
   
   const resetAgentBtn = document.getElementById('resetAgentBtn');
   if (resetAgentBtn) {
-    resetAgentBtn.onclick = resetAgent;
+    resetAgentBtn.onclick = (e) => {
+      console.log('[Settings] 🔴 Reset Agent button clicked - event triggered');
+      resetAgent();
+    };
     console.log('[Settings] ✓ resetAgentBtn attached');
   } else {
     console.error('[Settings] ✗ resetAgentBtn not found');
@@ -242,20 +247,30 @@ async function checkStatus() {
       updateAgentStatus();
       
       if (result.status === 'active') {
-        showSuccess('Agent is active and ready to use!');
+        showSuccess('✅ Agent is active and ready to use!');
         hideClaimSection();
         showActiveSection();
       } else if (result.status === 'claim_pending') {
-        showError('Claim not completed yet. Please complete the claim process first.');
+        showError('⚠️ Claim not completed yet. Please visit the claim URL and complete the verification process on Moltbook.');
+      } else if (result.status === 'error') {
+        showError('❌ Agent status: error. This means the claim is not completed. Please visit the claim URL above, complete all verification steps on Moltbook, then click "Check Status" again.');
       } else {
-        showError('Agent status: ' + result.status);
+        showError('⚠️ Agent status: ' + result.status + '. Please check the claim process.');
       }
     } else {
-      showError(result.error || 'Status check failed');
+      // Show more helpful error messages
+      const errorMsg = result.error || 'Status check failed';
+      if (errorMsg.includes('timeout') || errorMsg.includes('slow')) {
+        showError('⏱️ ' + errorMsg);
+      } else if (errorMsg.includes('connect')) {
+        showError('🔌 ' + errorMsg);
+      } else {
+        showError('❌ ' + errorMsg);
+      }
     }
   } catch (error) {
     console.error('[Settings] Status check error:', error);
-    showError('Status check failed: ' + error.message);
+    showError('❌ Status check failed: ' + error.message);
   } finally {
     btn.disabled = false;
     btn.textContent = originalText;
@@ -295,21 +310,30 @@ async function fetchSkillDoc() {
 
 // Reset agent
 async function resetAgent() {
+  console.log('[Settings] Reset Agent button clicked');
+  
   if (!confirm('Are you sure you want to reset the agent? This will delete all agent data including the API key.')) {
+    console.log('[Settings] Reset cancelled by user');
     return;
   }
   
+  console.log('[Settings] Proceeding with agent reset...');
+  
   try {
     const result = await window.electronAPI.moltbookResetAgent();
+    console.log('[Settings] Reset result:', result);
     
     if (result.success) {
       currentAgent = null;
       showAgentNotRegistered();
       showSuccess('Agent reset successfully');
+      console.log('[Settings] ✅ Agent reset successful');
     } else {
+      console.error('[Settings] ❌ Reset failed:', result.error);
       showError(result.error || 'Reset failed');
     }
   } catch (error) {
+    console.error('[Settings] ❌ Reset exception:', error);
     showError('Reset failed: ' + error.message);
   }
 }
@@ -400,9 +424,17 @@ function updateAgentStatus() {
       break;
     case 'error':
       badge.classList.add('error');
-      text.textContent = 'Error';
-      hideClaimSection();
+      text.textContent = 'Error - Claim Not Completed';
+      // Show claim section with helpful message
+      showClaimSection();
       hideActiveSection();
+      // Add helpful error message
+      const errorDiv = document.getElementById('agentError');
+      if (errorDiv) {
+        errorDiv.textContent = '⚠️ Agent status is "error" which means the claim process is not completed. Please visit the claim URL above and complete all verification steps on Moltbook, then click "Check Status" again.';
+        errorDiv.className = 'alert alert-warning';
+        errorDiv.classList.remove('hidden');
+      }
       break;
     default:
       text.textContent = currentAgent.status;
@@ -499,6 +531,211 @@ function showError(message) {
   errorDiv.classList.remove('hidden');
 }
 
+// Moltbook Identity System Functions - NEW
+
+// Load identity status
+async function loadIdentityStatus() {
+  try {
+    console.log('[Identity] Loading identity status...');
+    const result = await window.electronAPI.moltbookGetIdentityStatus();
+    
+    if (result.success) {
+      identityStatus = result.identity;
+      updateIdentityDisplay();
+    } else {
+      console.error('[Identity] Failed to load identity status:', result.error);
+      showIdentityError('Failed to load identity status: ' + result.error);
+    }
+  } catch (error) {
+    console.error('[Identity] Error loading identity status:', error);
+    showIdentityError('Error loading identity status');
+  }
+}
+
+// Generate identity token
+async function generateIdentityToken() {
+  try {
+    console.log('[Identity] Generating identity token...');
+    showIdentityStatus('Generating identity token...', 'info');
+    
+    const result = await window.electronAPI.moltbookGenerateIdentityToken();
+    
+    if (result.success) {
+      console.log('[Identity] ✅ Identity token generated successfully');
+      showIdentityStatus('✅ Identity token generated successfully!', 'success');
+      
+      // Update display
+      await loadIdentityStatus();
+      
+      // Show token
+      document.getElementById('identityTokenValue').value = result.token;
+      document.getElementById('identityTokenDisplay').classList.remove('hidden');
+      
+    } else {
+      console.error('[Identity] ❌ Failed to generate token:', result.error);
+      showIdentityStatus('❌ Failed to generate token: ' + result.error, 'error');
+    }
+  } catch (error) {
+    console.error('[Identity] Error generating token:', error);
+    showIdentityStatus('❌ Error: ' + error.message, 'error');
+  }
+}
+
+// Test identity token
+async function testIdentityToken() {
+  try {
+    if (!identityStatus || !identityStatus.token) {
+      showIdentityStatus('❌ No token available. Generate a token first.', 'error');
+      return;
+    }
+    
+    console.log('[Identity] Testing identity token...');
+    showIdentityStatus('Testing identity token...', 'info');
+    
+    // Use a dummy app key for testing (in real usage, the service would have their own app key)
+    const testAppKey = 'moltdev_test_key_for_demo';
+    
+    const result = await window.electronAPI.moltbookVerifyIdentityToken({
+      token: identityStatus.token,
+      appKey: testAppKey
+    });
+    
+    if (result.success) {
+      if (result.valid && result.agent) {
+        console.log('[Identity] ✅ Token verification successful');
+        showIdentityStatus('✅ Token verified successfully!', 'success');
+        
+        // Display verification result
+        const testContent = document.getElementById('identityTestContent');
+        testContent.innerHTML = `
+          <div class="agent-profile">
+            <h5>👤 Agent Profile</h5>
+            <div class="profile-info">
+              <div class="info-row">
+                <span class="label">Name:</span>
+                <span class="value">${result.agent.name}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">Karma:</span>
+                <span class="value">🏆 ${result.agent.karma || 0}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">Claimed:</span>
+                <span class="value">${result.agent.is_claimed ? '✅ Yes' : '❌ No'}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">Posts:</span>
+                <span class="value">${result.agent.stats?.posts || 0}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">Comments:</span>
+                <span class="value">${result.agent.stats?.comments || 0}</span>
+              </div>
+              ${result.agent.owner ? `
+                <div class="info-row">
+                  <span class="label">Owner:</span>
+                  <span class="value">@${result.agent.owner.x_handle} ${result.agent.owner.x_verified ? '✅' : ''}</span>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+        document.getElementById('identityTestResult').classList.remove('hidden');
+        
+      } else {
+        console.error('[Identity] ❌ Token invalid:', result.error);
+        showIdentityStatus('❌ Token invalid: ' + (result.error || 'Unknown error'), 'error');
+      }
+    } else {
+      console.error('[Identity] ❌ Token verification failed:', result.error);
+      showIdentityStatus('❌ Verification failed: ' + result.error, 'error');
+    }
+  } catch (error) {
+    console.error('[Identity] Error testing token:', error);
+    showIdentityStatus('❌ Error: ' + error.message, 'error');
+  }
+}
+
+// Update identity display
+function updateIdentityDisplay() {
+  if (!identityStatus) return;
+  
+  // Agent status
+  const agentStatusEl = document.getElementById('identityAgentStatus');
+  if (identityStatus.canGenerateToken) {
+    agentStatusEl.textContent = `✅ ${identityStatus.agentName} (Active)`;
+    agentStatusEl.style.color = '#22c55e';
+  } else {
+    agentStatusEl.textContent = `❌ ${identityStatus.agentName || 'Unknown'} (${identityStatus.agentStatus})`;
+    agentStatusEl.style.color = '#ef4444';
+  }
+  
+  // Token status
+  const tokenStatusEl = document.getElementById('identityTokenStatus');
+  const tokenExpiryEl = document.getElementById('identityTokenExpiry');
+  
+  if (identityStatus.hasToken && !identityStatus.tokenExpired) {
+    tokenStatusEl.textContent = '✅ Valid token';
+    tokenStatusEl.style.color = '#22c55e';
+    tokenExpiryEl.textContent = new Date(identityStatus.expiresAt).toLocaleString();
+    
+    // Show token
+    document.getElementById('identityTokenValue').value = identityStatus.token;
+    document.getElementById('identityTokenDisplay').classList.remove('hidden');
+  } else if (identityStatus.hasToken && identityStatus.tokenExpired) {
+    tokenStatusEl.textContent = '⏰ Token expired';
+    tokenStatusEl.style.color = '#f59e0b';
+    tokenExpiryEl.textContent = 'Expired';
+    document.getElementById('identityTokenDisplay').classList.add('hidden');
+  } else {
+    tokenStatusEl.textContent = '❌ No token';
+    tokenStatusEl.style.color = '#ef4444';
+    tokenExpiryEl.textContent = '-';
+    document.getElementById('identityTokenDisplay').classList.add('hidden');
+  }
+  
+  // Enable/disable generate button
+  const generateBtn = document.getElementById('generateIdentityTokenBtn');
+  if (generateBtn) {
+    generateBtn.disabled = !identityStatus.canGenerateToken;
+    generateBtn.textContent = identityStatus.canGenerateToken ? 
+      'Generate Identity Token' : 
+      'Agent must be active to generate token';
+  }
+}
+
+// Show identity status message
+function showIdentityStatus(message, type) {
+  // You can implement a status display similar to other parts of the app
+  console.log(`[Identity] ${type.toUpperCase()}: ${message}`);
+  
+  // Hide error if showing success/info
+  if (type !== 'error') {
+    document.getElementById('identityError').classList.add('hidden');
+  }
+}
+
+// Show identity error
+function showIdentityError(message) {
+  const errorEl = document.getElementById('identityError');
+  errorEl.textContent = message;
+  errorEl.classList.remove('hidden');
+  console.error('[Identity] Error:', message);
+}
+
+// Copy identity token to clipboard
+function copyIdentityToken() {
+  const tokenEl = document.getElementById('identityTokenValue');
+  if (tokenEl && tokenEl.value) {
+    navigator.clipboard.writeText(tokenEl.value).then(() => {
+      showIdentityStatus('✅ Token copied to clipboard!', 'success');
+    }).catch(err => {
+      console.error('[Identity] Failed to copy token:', err);
+      showIdentityStatus('❌ Failed to copy token', 'error');
+    });
+  }
+}
+
 // Export for use in app.js and HTML onclick
 window.settingsModule = {
   initSettings,
@@ -509,6 +746,11 @@ window.settingsModule = {
   registerAgent,
   resetAgent,
   checkForUpdates,
+  // NEW Identity functions
+  loadIdentityStatus,
+  generateIdentityToken,
+  testIdentityToken,
+  copyIdentityToken,
 };
 
 // Auto-initialize if settings page exists on load
