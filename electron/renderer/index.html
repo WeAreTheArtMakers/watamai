@@ -75,6 +75,16 @@
     <main class="main-content">
       <!-- Dashboard Page -->
       <div id="dashboard" class="page active">
+        <!-- Moltbook Status Banner (hidden by default) -->
+        <div id="moltbookStatusBanner" class="status-banner hidden">
+          <div class="banner-icon">⚠️</div>
+          <div class="banner-content">
+            <div class="banner-title" id="bannerTitle">Moltbook Server Issue</div>
+            <div class="banner-message" id="bannerMessage">Unable to connect to Moltbook. Your agent will retry automatically.</div>
+          </div>
+          <button class="banner-close" onclick="document.getElementById('moltbookStatusBanner').classList.add('hidden')">✕</button>
+        </div>
+
         <header class="page-header">
           <h2>Dashboard</h2>
           <p>Agent status and recent activity</p>
@@ -913,7 +923,7 @@
 
           <div class="form-group">
             <label for="replyKeywords">Reply Keywords</label>
-            <input type="text" id="replyKeywords" value="watam-agent, watam, modX" placeholder="watam-agent, watam, modX" class="form-control">
+            <input type="text" id="replyKeywords" value="" placeholder="Leave empty to reply to all posts" class="form-control">
             <small>Only reply to posts containing these keywords (leave empty for all)</small>
           </div>
 

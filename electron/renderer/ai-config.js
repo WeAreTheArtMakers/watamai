@@ -1272,9 +1272,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Listen for agent status updates from backend
 if (window.electronAPI && window.electronAPI.onAgentStatusUpdate) {
-  window.electronAPI.onAgentStatusUpdate((data) => {
+  window.electronAPI.onAgentStatusUpdate(async (data) => {
     console.log('[AI] Agent status update received:', data);
-    updateAgentStatus();
+    
+    // Force reload config to get latest stats
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Update UI
+    await updateAgentStatus();
+    
     if (data.postTitle) {
       logActivity(`Replied to: ${data.postTitle}`);
     }

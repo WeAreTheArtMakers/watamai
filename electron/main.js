@@ -53,16 +53,21 @@ async function processPostQueue() {
     const now = new Date();
     
     if (lastRateLimit) {
+      // lastRateLimit is a string timestamp
       const rateLimitEnd = new Date(lastRateLimit);
       
       // Validate the date
       if (!isNaN(rateLimitEnd.getTime()) && now < rateLimitEnd) {
         // SILENTLY skip - don't spam console when rate limited
         return; // Still rate limited
+      } else if (now >= rateLimitEnd) {
+        // Rate limit expired - clear it
+        console.log('[Queue] ✅ Rate limit expired, clearing...');
+        store.set('lastRateLimit', null);
       }
     }
     
-    console.log('[Queue] ✅ Rate limit expired, processing', queuedPosts.length, 'queued posts...');
+    console.log('[Queue] ✅ No rate limit active, processing', queuedPosts.length, 'queued posts...');
     
     // REMOVED: Safe mode check - let auto-post work
     // Users can disable auto-post per draft if needed
@@ -1364,6 +1369,7 @@ async function checkMoltbookStatus(apiKey) {
           console.error('[Moltbook] - Re-register your agent');
           console.error('[Moltbook] - Complete the claim process on Moltbook website');
           console.error('[Moltbook] - Check if API key was corrupted');
+          console.error('[Moltbook] ⚠️ NOTE: This might be a temporary Moltbook server issue');
           resolve({ status: 'error', statusCode: res.statusCode, message: 'API key invalid or expired - please re-register agent' });
         } else if (res.statusCode === 403) {
           console.error('[Moltbook] ❌ 403 Forbidden - claim not completed');
@@ -1373,6 +1379,12 @@ async function checkMoltbookStatus(apiKey) {
           console.error('[Moltbook] ❌ 404 Not Found - agent not found');
           console.error('[Moltbook] 💡 Solution: Re-register your agent');
           resolve({ status: 'error', statusCode: res.statusCode, message: 'Agent not found - please re-register agent' });
+        } else if (res.statusCode === 500 || res.statusCode === 502 || res.statusCode === 503) {
+          console.error('[Moltbook] ❌ Server Error:', res.statusCode);
+          console.error('[Moltbook] 💡 This is a TEMPORARY Moltbook server issue');
+          console.error('[Moltbook] 💡 Your API key is likely still valid');
+          console.error('[Moltbook] 💡 The agent will retry automatically');
+          resolve({ status: 'temporary_error', statusCode: res.statusCode, message: 'Moltbook server temporary error - will retry' });
         } else {
           // Any other status code is an error
           console.error('[Moltbook] ❌ Unexpected status code:', res.statusCode);
@@ -1854,7 +1866,7 @@ ipcMain.handle('get-config', () => {
     store.set('replySubmolts', 'general, music, art, finance');
   }
   if (!store.get('replyKeywords') || store.get('replyKeywords').trim() === '') {
-    store.set('replyKeywords', 'watam-agent, watam, modX');
+    store.set('replyKeywords', ''); // EMPTY - reply to all posts by default
   }
   
   return {
@@ -1873,7 +1885,7 @@ ipcMain.handle('get-config', () => {
     checkInterval: store.get('checkInterval', 15),
     // CRITICAL: Use spaces after commas to match HTML defaults
     replySubmolts: store.get('replySubmolts', 'general, music, art, finance'),
-    replyKeywords: store.get('replyKeywords', 'watam-agent, watam, modX'),
+    replyKeywords: store.get('replyKeywords', ''), // EMPTY - reply to all posts
     maxRepliesPerHour: store.get('maxRepliesPerHour', 10),
     agentRunning: store.get('agentRunning', false),
     // Advanced AI settings
@@ -3257,7 +3269,7 @@ ipcMain.handle('test-agent-loop', async () => {
       aiModel: store.get('aiModel'),
       autoReplyEnabled: store.get('autoReplyEnabled', true),
       replySubmolts: store.get('replySubmolts', 'general,music,art,finance'),
-      replyKeywords: store.get('replyKeywords', 'watam-agent,watam,modX'),
+      replyKeywords: store.get('replyKeywords', ''), // EMPTY - reply to all posts
       maxRepliesPerHour: store.get('maxRepliesPerHour', 10),
     };
     
@@ -3403,7 +3415,7 @@ ipcMain.handle('get-agent-status', async () => {
     const agent = store.getAgent();
     if (!agent) {
       console.warn('[AgentStatus] No agent registered');
-      return { success: false, error: 'No agent registered' };
+      return { success: false, error: 'No agent registered', statusCode: 404 };
     }
     
     const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
@@ -3418,6 +3430,7 @@ ipcMain.handle('get-agent-status', async () => {
       
       return {
         success: true,
+        statusCode: statusResult.statusCode || 200,
         agent: {
           name: statusResult.agent.name,
           karma: statusResult.agent.karma || 0,
@@ -3428,11 +3441,15 @@ ipcMain.handle('get-agent-status', async () => {
       };
     } else {
       console.warn('[AgentStatus] Agent not active or no data');
-      return { success: false, error: 'Agent not active' };
+      return { 
+        success: false, 
+        error: statusResult.message || 'Agent not active',
+        statusCode: statusResult.statusCode || 500
+      };
     }
   } catch (error) {
     console.error('[AgentStatus] ❌ Failed to fetch agent status:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message, statusCode: 500 };
   }
 });
 
@@ -5027,6 +5044,15 @@ async function checkMentionsInOwnPosts() {
                 author: comment.author,
               });
               
+              // Notify frontend to update status
+              if (mainWindow) {
+                mainWindow.webContents.send('agent-status-update', {
+                  lastCheck: new Date().toISOString(),
+                  repliesToday: repliesToday + 1,
+                  postTitle: post.title || 'Mention reply',
+                });
+              }
+              
               // Only reply to one mention per loop to avoid spam
               return;
             } else {
@@ -5132,6 +5158,18 @@ async function runAgentLoop() {
         agent.status = 'active';
         agent.lastCheckedAt = new Date().toISOString();
         store.saveAgent(agent);
+      } else if (statusResult.status === 'temporary_error') {
+        console.warn('[AI] ⚠️ Moltbook server temporary error (500/502/503)');
+        console.warn('[AI] 💡 This is NOT an API key problem');
+        console.warn('[AI] 💡 Using cached agent status:', agent.status);
+        
+        // If we have a cached active status, continue with it
+        if (agent.status === 'active') {
+          console.log('[AI] ✅ Using cached ACTIVE status - continuing...');
+        } else {
+          console.error('[AI] ❌ Cached status is not active, skipping this loop');
+          return;
+        }
       } else {
         console.error('[AI] ❌ Agent not active, status:', statusResult.status);
         console.error('[AI] 🚨 CRITICAL: Agent cannot interact with posts until claim is completed!');
@@ -5594,7 +5632,7 @@ ipcMain.handle('start-agent', async () => {
       aiModel: store.get('aiModel'),
       checkInterval: store.get('checkInterval', 15),
       replySubmolts: store.get('replySubmolts', 'general,music,art,finance'),
-      replyKeywords: store.get('replyKeywords', 'watam-agent,watam,modX'),
+      replyKeywords: store.get('replyKeywords', ''), // EMPTY by default - reply to all posts
       maxRepliesPerHour: store.get('maxRepliesPerHour', 10),
       autoReplyEnabled: store.get('autoReplyEnabled', true),
     };

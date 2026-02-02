@@ -320,6 +320,16 @@ async function loadAgentStats() {
     
     if (!result.success) {
       console.warn('[Dashboard] Failed to load agent stats:', result.error);
+      console.warn('[Dashboard] Status code:', result.statusCode);
+      
+      // Show Moltbook status banner if it's a server error
+      if (result.statusCode === 500 || result.statusCode === 502 || result.statusCode === 503 || result.statusCode === 401) {
+        console.log('[Dashboard] 🚨 Showing Moltbook status banner for code:', result.statusCode);
+        showMoltbookStatusBanner(result.statusCode, result.error);
+      } else {
+        console.log('[Dashboard] ⚠️ Not showing banner for code:', result.statusCode);
+      }
+      
       // Show default values instead of "Loading..."
       const agentStatsContainer = document.getElementById('agentStats');
       if (agentStatsContainer) {
@@ -340,6 +350,9 @@ async function loadAgentStats() {
       }
       return;
     }
+    
+    // Hide banner if stats loaded successfully
+    hideMoltbookStatusBanner();
     
     console.log('[Dashboard] Agent stats:', result.agent);
     
@@ -2573,3 +2586,47 @@ async function loadAgentProfile() {
 }
 
 // Agent profile initialization is now handled in main DOMContentLoaded above
+
+// Moltbook Status Banner Functions
+function showMoltbookStatusBanner(statusCode, errorMessage) {
+  const banner = document.getElementById('moltbookStatusBanner');
+  if (!banner) return;
+  
+  const title = document.getElementById('bannerTitle');
+  const message = document.getElementById('bannerMessage');
+  
+  // Remove all type classes
+  banner.classList.remove('warning', 'error', 'info', 'success');
+  
+  if (statusCode === 500 || statusCode === 502 || statusCode === 503) {
+    // Server error - warning (temporary)
+    banner.classList.add('warning');
+    title.textContent = '⚠️ Moltbook Server Issue';
+    message.textContent = 'Moltbook is having temporary server issues. Your agent will retry automatically. This is not your fault.';
+  } else if (statusCode === 401 || statusCode === 403) {
+    // Auth error - BUT this is usually a temporary Moltbook issue too!
+    banner.classList.add('warning');
+    title.textContent = '⚠️ Moltbook Connection Issue';
+    message.textContent = 'Cannot connect to Moltbook right now. This is usually a temporary server issue. Check moltbook.com to see if the site is working. Your agent will retry automatically.';
+  } else {
+    // Generic error
+    banner.classList.add('warning');
+    title.textContent = '⚠️ Connection Issue';
+    message.textContent = errorMessage || 'Unable to connect to Moltbook. Check your internet connection.';
+  }
+  
+  banner.classList.remove('hidden');
+  console.log('[Banner] Showing Moltbook status banner:', statusCode);
+}
+
+function hideMoltbookStatusBanner() {
+  const banner = document.getElementById('moltbookStatusBanner');
+  if (banner) {
+    banner.classList.add('hidden');
+    console.log('[Banner] Hiding Moltbook status banner');
+  }
+}
+
+// Make functions globally accessible
+window.showMoltbookStatusBanner = showMoltbookStatusBanner;
+window.hideMoltbookStatusBanner = hideMoltbookStatusBanner;

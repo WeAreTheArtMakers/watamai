@@ -250,10 +250,19 @@ async function checkStatus() {
         showSuccess('✅ Agent is active and ready to use!');
         hideClaimSection();
         showActiveSection();
+      } else if (result.status === 'temporary_error') {
+        showError('⚠️ Moltbook server is having temporary issues (500/502/503). Your agent is likely still valid. Try again in a few minutes.');
       } else if (result.status === 'claim_pending') {
         showError('⚠️ Claim not completed. Visit the claim URL above and complete verification on Moltbook.');
       } else if (result.status === 'error') {
-        showError('❌ Agent not verified. Complete the claim process on Moltbook, wait a few minutes, then click "Check Status" again.');
+        // Check if it's a 401/403 (could be temporary) or 500 (server issue)
+        if (result.statusCode === 401 || result.statusCode === 403) {
+          showError('⚠️ Cannot connect to Moltbook. This is usually a temporary server issue. Check moltbook.com to see if the site is working, then try again.');
+        } else if (result.statusCode === 500 || result.statusCode === 502 || result.statusCode === 503) {
+          showError('⚠️ Moltbook server error. This is temporary - your agent is likely still valid. Try again later.');
+        } else {
+          showError('❌ Agent verification failed. If this persists, you may need to re-register your agent.');
+        }
       } else {
         showError('⚠️ Agent status: ' + result.status + '. Check the claim process on Moltbook.');
       }
