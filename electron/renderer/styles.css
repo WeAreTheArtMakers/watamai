@@ -2609,17 +2609,21 @@ select.form-control {
 
 .queue-icon {
   font-size: 16px;
+  color: white;
 }
 
 .queue-count {
   font-size: 18px;
   font-weight: 700;
   font-family: 'SF Mono', Monaco, monospace;
+  color: white;
 }
 
 .queue-label {
   font-size: 12px;
-  opacity: 0.9;
+  color: white;
+  opacity: 0.95;
+  font-weight: 500;
 }
 
 .post-queue-status.has-queue {
