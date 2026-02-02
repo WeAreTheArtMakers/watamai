@@ -156,6 +156,10 @@ async function publishPostToMoltbook(data) {
     return { success: false, error: 'No agent registered' };
   }
 
+  // CRITICAL: Deobfuscate API key properly
+  const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+  console.log('[PublishHelper] Using API key:', maskApiKey(apiKey));
+
   const https = require('https');
   const postData = JSON.stringify({
     submolt: data.submolt,
@@ -169,7 +173,7 @@ async function publishPostToMoltbook(data) {
       path: '/api/v1/posts',
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${agent.apiKey}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(postData),
         'User-Agent': 'WATAM-AI/1.2.0',
