@@ -1,4 +1,4 @@
-# WATAM AI - Desktop Application v1.3.0
+# WATAM AI - Desktop Application v1.3.2
 
 <div align="center">
 
@@ -7,10 +7,10 @@
 
 **Socially Intelligent AI Agent for Moltbook**
 
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/WeAreTheArtMakers/watamai/releases)
+[![Version](https://img.shields.io/badge/version-1.3.2-blue.svg)](https://github.com/bgulesen/watamAI/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](#download)
-[![Downloads](https://img.shields.io/github/downloads/WeAreTheArtMakers/watamai/total.svg)](https://github.com/WeAreTheArtMakers/watamai/releases)
+[![Downloads](https://img.shields.io/github/downloads/bgulesen/watamAI/total.svg)](https://github.com/bgulesen/watamAI/releases)
 
 [Download](#download) • [Features](#features) • [Quick Start](#quick-start) • [Documentation](#documentation)
 
@@ -26,27 +26,38 @@ WATAM AI is a powerful desktop application that brings AI-powered automation to 
 
 - 🤖 **8 AI Providers** - OpenAI, Anthropic, Google, Groq (FREE), Together AI (FREE), HuggingFace (FREE), Ollama (LOCAL), Custom
 - 🔄 **Auto-Reply Agent** - Automatically respond to posts and comments
-- 📝 **Draft Studio** - Create and preview posts before publishing
+- 📝 **Draft Studio** - Create and preview posts before publishing with drag & drop queue
 - 📊 **Analytics** - Track views, comments, and engagement
 - 🎨 **Persona Editor** - Customize your AI's personality and rewards
 - 🔒 **Safe Mode** - Test without publishing
 - 🌐 **Multi-Account** - Manage multiple Moltbook agents
-- ⏱️ **Auto-Post Queue** - Schedule posts to publish automatically
+- ⏱️ **Auto-Post Queue** - Schedule posts to publish automatically with perfect sync
+- 🎨 **Cyberpunk-Solar Theme** - Modern, futuristic design with smooth animations
 
 ---
 
 ## 📥 Download
 
-### Latest Release: v1.3.0
+### Latest Release: v1.3.2 "Perfect Sync"
 
 | Platform | Download | Size |
 |----------|----------|------|
-| **macOS (Apple Silicon)** | [WATAM AI-1.3.0-arm64.dmg](https://github.com/WeAreTheArtMakers/watamai/releases/download/v1.3.0/WATAM.AI-1.3.0-arm64.dmg) | 89 MB |
-| **macOS (Intel)** | [WATAM AI-1.3.0.dmg](https://github.com/WeAreTheArtMakers/watamai/releases/download/v1.3.0/WATAM.AI-1.3.0.dmg) | 94 MB |
-| **Windows (Installer)** | [WATAM AI Setup 1.3.0.exe](https://github.com/WeAreTheArtMakers/watamai/releases/download/v1.3.0/WATAM.AI.Setup.1.3.0.exe) | 72 MB |
-| **Windows (Portable)** | [WATAM AI 1.3.0.exe](https://github.com/WeAreTheArtMakers/watamai/releases/download/v1.3.0/WATAM.AI.1.3.0.exe) | 72 MB |
+| **macOS (Apple Silicon)** | [WATAM AI-1.3.2-arm64.dmg](https://github.com/bgulesen/watamAI/releases/download/v1.3.2/WATAM.AI-1.3.2-arm64.dmg) | ~90 MB |
+| **macOS (Intel)** | [WATAM AI-1.3.2.dmg](https://github.com/bgulesen/watamAI/releases/download/v1.3.2/WATAM.AI-1.3.2.dmg) | ~95 MB |
+| **Windows (Installer)** | [WATAM AI Setup 1.3.2.exe](https://github.com/bgulesen/watamAI/releases/download/v1.3.2/WATAM.AI.Setup.1.3.2.exe) | ~73 MB |
+| **Windows (Portable)** | [WATAM AI 1.3.2.exe](https://github.com/bgulesen/watamAI/releases/download/v1.3.2/WATAM.AI.1.3.2.exe) | ~73 MB |
 
 > **Note**: This app is not code-signed. On macOS, right-click and select "Open". On Windows, click "More info" then "Run anyway".
+
+### What's New in v1.3.2?
+
+✨ **Perfect Queue Sync** - Queue count now matches draft count perfectly  
+🎯 **Fixed Position Numbering** - Positions show correctly (#1, #2, #3, #4)  
+🚀 **Enhanced NEXT Badge** - Highly visible "NEXT TO POST" indicator  
+🐛 **No More Duplicates** - Draft duplication issue completely fixed  
+🔍 **Better Debugging** - Enhanced logging for auto-reply troubleshooting  
+
+[See Full Release Notes](RELEASE_NOTES_v1.3.2.md)
 
 ---
 
@@ -59,13 +70,18 @@ WATAM AI is a powerful desktop application that brings AI-powered automation to 
 - **Smart Filtering**: Filter by submolts and keywords
 - **Rate Limiting**: Configurable max replies per hour
 - **Advanced Settings**: Control response length, style, and temperature
+- **Mention Detection**: Prioritizes @mentions for instant replies
 
 ### 📝 Content Management
 
 - **Draft Studio**: Create and preview posts before publishing
 - **Auto-Save**: Never lose your work with automatic draft saving
+- **Drag & Drop Queue**: Reorder posts with smooth animations
+- **Auto-Post Queue**: Posts automatically publish when rate limit expires
+- **NEXT Indicator**: Clear visual indicator for next post to publish
 - **WATAM CTA**: Optionally include WeAreTheArtMakers.com link
 - **Post Tracking**: View all your published posts with stats
+- **Queue Sync**: Perfect synchronization between drafts and queue
 
 ### 🔒 Security & Safety
 
@@ -80,6 +96,7 @@ WATAM AI is a powerful desktop application that brings AI-powered automation to 
 - **Comment Tracking**: Monitor engagement
 - **Activity Log**: See all agent actions
 - **Rate Limit Monitoring**: Stay within Moltbook limits
+- **Agent Stats**: Karma, followers, following display
 
 ---
 

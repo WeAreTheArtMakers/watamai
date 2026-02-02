@@ -23,8 +23,8 @@
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="logo">
-        <h1>WATAM AI</h1>
-        <span class="version">v1.3.1</span>
+        <div class="logo-icon">W</div>
+        <h1>Watam AI</h1>
       </div>
 
       <nav class="nav">
@@ -86,6 +86,24 @@
             <div class="status-indicator online">
               <span class="dot"></span>
               <span>Ready</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Agent Stats</h3>
+            <div id="agentStats" class="stats">
+              <div class="stat">
+                <span class="label">Karma</span>
+                <span class="value">Loading...</span>
+              </div>
+              <div class="stat">
+                <span class="label">Followers</span>
+                <span class="value">Loading...</span>
+              </div>
+              <div class="stat">
+                <span class="label">Following</span>
+                <span class="value">Loading...</span>
+              </div>
             </div>
           </div>
 
@@ -682,6 +700,11 @@
           <p>Manage your draft posts</p>
         </header>
 
+        <div class="drafts-controls">
+          <button id="cleanQueueBtn" class="btn btn-warning">🧹 Clean Queue</button>
+          <span class="info-text">Remove orphaned queue items</span>
+        </div>
+
         <div id="draftsContainer" class="drafts-container">
           <p class="empty-state">No saved drafts yet. Create one in Draft Studio!</p>
         </div>
@@ -697,7 +720,31 @@
         <div class="draft-form">
           <div class="form-group">
             <label for="submolt">Submolt</label>
-            <input type="text" id="submolt" placeholder="art" value="art">
+            <div class="submolt-selector">
+              <input 
+                type="text" 
+                id="submoltSearch" 
+                placeholder="Search submolts..." 
+                class="form-control"
+                style="margin-bottom: 8px;"
+              >
+              <select id="submolt" class="form-control" size="6">
+                <option value="general">General</option>
+                <option value="art">Art</option>
+                <option value="music">Music</option>
+                <option value="finance">Finance</option>
+                <option value="technology">Technology</option>
+                <!-- More options loaded dynamically -->
+              </select>
+              <div style="display: flex; gap: 8px; margin-top: 8px; align-items: center;">
+                <small class="submolt-hint" style="flex: 1; color: var(--text-tertiary);">
+                  💡 Choose the right submolt for better engagement
+                </small>
+                <button type="button" id="createSubmoltBtn" class="btn btn-xs btn-secondary" style="white-space: nowrap;">
+                  ➕ Create New
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="form-group">
@@ -748,6 +795,7 @@
 
         <div class="posts-controls">
           <button id="refreshPostsBtn" class="btn btn-secondary">🔄 Refresh</button>
+          <button id="fixUrlsBtn" class="btn btn-warning">🔧 Fix URLs</button>
           
           <!-- Post Queue Status -->
           <div id="postQueueStatus" class="post-queue-status">
@@ -845,7 +893,7 @@
           
           <div class="form-group">
             <label class="switch-label">
-              <input type="checkbox" id="autoReplyEnabled">
+              <input type="checkbox" id="autoReplyEnabled" checked>
               <span class="switch-text">Enable Auto-Reply</span>
             </label>
             <small>Agent will automatically respond to posts and comments</small>
@@ -853,19 +901,19 @@
 
           <div class="form-group">
             <label for="checkInterval">Check Interval (minutes)</label>
-            <input type="number" id="checkInterval" value="5" min="1" max="60" class="form-control">
+            <input type="number" id="checkInterval" value="15" min="1" max="60" class="form-control">
             <small>How often to check for new posts (minimum 1 minute)</small>
           </div>
 
           <div class="form-group">
             <label for="replySubmolts">Monitor Submolts</label>
-            <input type="text" id="replySubmolts" placeholder="general, introductions" class="form-control">
+            <input type="text" id="replySubmolts" value="general, music, art, finance" placeholder="general, music, art, finance" class="form-control">
             <small>Comma-separated list of submolts to monitor (leave empty for all)</small>
           </div>
 
           <div class="form-group">
             <label for="replyKeywords">Reply Keywords</label>
-            <input type="text" id="replyKeywords" placeholder="WATAM, modX, art" class="form-control">
+            <input type="text" id="replyKeywords" value="watam-agent, watam, modX" placeholder="watam-agent, watam, modX" class="form-control">
             <small>Only reply to posts containing these keywords (leave empty for all)</small>
           </div>
 

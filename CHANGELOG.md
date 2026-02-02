@@ -5,6 +5,53 @@ All notable changes to WATAM AI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.2] - 2026-02-02
+
+### Added
+- **Queue Synchronization System**
+  - Automatic cleanup of orphaned queue items on page load
+  - Smart queue filtering - only shows items with matching drafts
+  - Enhanced position calculation using findIndex for accuracy
+  - Queue count now perfectly matches draft count
+- **Enhanced NEXT Badge**
+  - Redesigned "🚀 NEXT TO POST" badge in top-right corner
+  - Larger, more prominent design with glow effect
+  - Smooth pulse animation for attention
+  - Better positioning outside card border
+- **Auto-Reply Debugging**
+  - Enhanced followers/following detection (checks profile and user objects)
+  - More detailed logging for troubleshooting
+  - Better error messages with actionable guidance
+  - New debug guide document
+
+### Fixed
+- **Draft Management**
+  - Fixed duplicate draft creation when saving same draft twice
+  - Fixed WATAM suffix check in duplicate detection
+  - Queue items now removed when draft is deleted
+  - Position numbering shows correctly (#1, #2, #3, #4 instead of #6, #7, etc.)
+- **Queue Display**
+  - Fixed queue count mismatch (showed 8 but only 4 drafts existed)
+  - Fixed green border not showing on position #1
+  - Fixed NEXT badge visibility and readability
+  - Drag & drop now has 500ms debounce to prevent reload spam
+- **Visual Issues**
+  - NEXT badge now highly visible with proper contrast
+  - Badge positioned to avoid overlap with content
+  - Improved cyberpunk-solar theme consistency
+
+### Changed
+- Queue now sorted by queuedAt timestamp (oldest first)
+- Position calculation more reliable with explicit comparison
+- updatePostQueueStatus now counts only queue items with drafts
+- Improved console logging for debugging
+
+### Technical
+- `electron/renderer/app.js`: Queue sync, duplicate prevention, position calculation
+- `electron/renderer/styles.css`: NEXT badge styling and positioning  
+- `electron/main.js`: Followers/following detection enhancement
+- `electron/package.json`: Version bump to 1.3.2
+
 ## [1.2.0] - 2026-02-01
 
 ### Added

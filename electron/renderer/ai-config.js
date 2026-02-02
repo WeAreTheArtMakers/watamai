@@ -139,22 +139,76 @@ async function loadAIConfig() {
       }
     }
     
-    // Auto-reply settings - CRITICAL: Use strict boolean check
-    const autoReplyCheckbox = document.getElementById('autoReplyEnabled');
-    if (autoReplyCheckbox) {
-      autoReplyCheckbox.checked = config.autoReplyEnabled === true;
-      console.log('[AI] Auto-reply checkbox set to:', autoReplyCheckbox.checked);
-    }
-    
-    // Load other settings
-    const checkIntervalInput = document.getElementById('checkInterval');
-    if (checkIntervalInput) checkIntervalInput.value = config.checkInterval || 5;
-    
-    const replySubmoltsInput = document.getElementById('replySubmolts');
-    if (replySubmoltsInput) replySubmoltsInput.value = config.replySubmolts || '';
-    
-    const replyKeywordsInput = document.getElementById('replyKeywords');
-    if (replyKeywordsInput) replyKeywordsInput.value = config.replyKeywords || '';
+    // Auto-reply settings - CRITICAL: Use strict boolean check with default true
+    // Wait for DOM to be ready before setting values - INCREASED TIMEOUT
+    setTimeout(() => {
+      console.log('[AI] ========================================');
+      console.log('[AI] Setting Auto-Reply default values...');
+      console.log('[AI] Config values:', {
+        autoReplyEnabled: config.autoReplyEnabled,
+        checkInterval: config.checkInterval,
+        replySubmolts: config.replySubmolts,
+        replyKeywords: config.replyKeywords
+      });
+      
+      const autoReplyCheckbox = document.getElementById('autoReplyEnabled');
+      if (autoReplyCheckbox) {
+        autoReplyCheckbox.checked = config.autoReplyEnabled !== false; // Default true
+        console.log('[AI] ✅ Auto-reply checkbox set to:', autoReplyCheckbox.checked);
+      } else {
+        console.error('[AI] ❌ Auto-reply checkbox not found!');
+      }
+      
+      // Load other settings with defaults
+      const checkIntervalInput = document.getElementById('checkInterval');
+      if (checkIntervalInput) {
+        const interval = config.checkInterval || 15;
+        checkIntervalInput.value = interval;
+        console.log('[AI] ✅ Check interval set to:', interval);
+      } else {
+        console.error('[AI] ❌ Check interval input not found!');
+      }
+      
+      const replySubmoltsInput = document.getElementById('replySubmolts');
+      if (replySubmoltsInput) {
+        // CRITICAL: Use spaces after commas to match HTML defaults
+        // Also check for empty strings and use default
+        const submolts = (config.replySubmolts && config.replySubmolts.trim()) ? config.replySubmolts : 'general, music, art, finance';
+        replySubmoltsInput.value = submolts;
+        console.log('[AI] ✅ Reply submolts set to:', submolts);
+        
+        // CRITICAL: Force update the input value again after a short delay
+        setTimeout(() => {
+          if (replySubmoltsInput.value !== submolts) {
+            console.warn('[AI] ⚠️ Submolts value lost, setting again...');
+            replySubmoltsInput.value = submolts;
+          }
+        }, 200);
+      } else {
+        console.error('[AI] ❌ Reply submolts input not found!');
+      }
+      
+      const replyKeywordsInput = document.getElementById('replyKeywords');
+      if (replyKeywordsInput) {
+        // CRITICAL: Use spaces after commas to match HTML defaults
+        // Also check for empty strings and use default
+        const keywords = (config.replyKeywords && config.replyKeywords.trim()) ? config.replyKeywords : 'watam-agent, watam, modX';
+        replyKeywordsInput.value = keywords;
+        console.log('[AI] ✅ Reply keywords set to:', keywords);
+        
+        // CRITICAL: Force update the input value again after a short delay
+        setTimeout(() => {
+          if (replyKeywordsInput.value !== keywords) {
+            console.warn('[AI] ⚠️ Keywords value lost, setting again...');
+            replyKeywordsInput.value = keywords;
+          }
+        }, 200);
+      } else {
+        console.error('[AI] ❌ Reply keywords input not found!');
+      }
+      
+      console.log('[AI] ========================================');
+    }, 500); // Increased from 300ms to 500ms for better reliability
     
     const maxRepliesInput = document.getElementById('maxRepliesPerHour');
     if (maxRepliesInput) maxRepliesInput.value = config.maxRepliesPerHour || 10;
@@ -805,15 +859,23 @@ async function testHeartbeat() {
     
     if (result.success) {
       showAIStatus('✅ Heartbeat test completed! Check console for details.', 'success');
-      console.log('[AI] ✅ Heartbeat test result:', result.message);
+      console.log('[AI] ✅ Heartbeat test result:', result.message || 'Success');
+      
+      if (result.agent) {
+        console.log('[AI] Agent details:', {
+          name: result.agent.name,
+          status: result.agent.status,
+          karma: result.agent.karma
+        });
+      }
       
       // Show notification
       if (window.showNotification) {
         window.showNotification('Heartbeat test completed! Check console for details.', 'info');
       }
     } else {
-      showAIStatus('❌ Heartbeat test failed: ' + result.error, 'error');
-      console.error('[AI] ❌ Heartbeat test error:', result.error);
+      showAIStatus('❌ Heartbeat test failed: ' + (result.error || 'Unknown error'), 'error');
+      console.error('[AI] ❌ Heartbeat test error:', result.error || 'Unknown error');
     }
   } catch (error) {
     showAIStatus('❌ Error: ' + error.message, 'error');

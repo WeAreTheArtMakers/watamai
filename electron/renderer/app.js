@@ -88,6 +88,37 @@ function checkAndShowRateLimit() {
   }).catch(err => {
     console.log('[App] No active rate limit found');
   });
+  
+  // ALWAYS show the rate limit card, even if no active limit
+  const rateLimitStatus = document.getElementById('rateLimitStatus');
+  if (rateLimitStatus) {
+    rateLimitStatus.classList.remove('hidden');
+    
+    // If no active rate limit, show "Ready to post"
+    window.electronAPI.getRateLimitStatus().then(result => {
+      if (!result.success || !result.nextAllowedTime) {
+        const countdownElement = document.getElementById('rateLimitCountdown');
+        const rateLimitCard = document.querySelector('.rate-limit-card');
+        const rateLimitTitle = document.querySelector('.rate-limit-title');
+        const rateLimitSubtitle = document.querySelector('.rate-limit-subtitle');
+        const rateLimitIcon = document.querySelector('.rate-limit-icon');
+        
+        if (countdownElement && rateLimitCard) {
+          countdownElement.textContent = '✅ READY';
+          rateLimitCard.classList.add('ready');
+          if (rateLimitTitle) rateLimitTitle.textContent = 'Ready to Post';
+          if (rateLimitSubtitle) rateLimitSubtitle.textContent = 'No rate limit active';
+          if (rateLimitIcon) rateLimitIcon.textContent = '🚀';
+        }
+      }
+    }).catch(() => {
+      // Show ready state on error
+      const countdownElement = document.getElementById('rateLimitCountdown');
+      if (countdownElement) {
+        countdownElement.textContent = '✅ READY';
+      }
+    });
+  }
 }
 
 // Wait for DOM to be ready
@@ -210,6 +241,9 @@ async function loadPageData(pageName) {
         if (tabs.length > 0) {
           console.log('[App] ✓ Tabs found, initializing...');
           initializeAgentProfile();
+          
+          // CRITICAL: Load agent stats for Persona page karma display
+          loadAgentStats();
         } else {
           console.error('[App] ❌ No tabs found! Retrying...');
           // Retry after a longer delay
@@ -218,6 +252,7 @@ async function loadPageData(pageName) {
             console.log('[App] Retry - Found tabs:', retryTabs.length);
             if (retryTabs.length > 0) {
               initializeAgentProfile();
+              loadAgentStats();
             } else {
               console.error('[App] ❌ Still no tabs found after retry!');
               console.error('[App] Persona page HTML:', personaPage.innerHTML.substring(0, 500));
@@ -232,6 +267,16 @@ async function loadPageData(pageName) {
 // Dashboard
 async function loadDashboard() {
   try {
+    console.log('[Dashboard] ========================================');
+    console.log('[Dashboard] Loading Dashboard...');
+    
+    // Check and show rate limit countdown if active
+    checkAndShowRateLimit();
+    
+    // Load agent stats from Moltbook - CRITICAL: Do this first
+    console.log('[Dashboard] Fetching agent stats from Moltbook...');
+    await loadAgentStats();
+    
     // Load rate limits
     document.getElementById('rateLimits').innerHTML = `
       <div class="stat">
@@ -258,8 +303,91 @@ async function loadDashboard() {
     
     // Load recent activity from logs
     await loadRecentActivity();
+    
+    console.log('[Dashboard] ✅ Dashboard loaded successfully');
+    console.log('[Dashboard] ========================================');
   } catch (error) {
-    console.error('Failed to load dashboard:', error);
+    console.error('[Dashboard] ❌ Failed to load dashboard:', error);
+  }
+}
+
+// Load agent stats from Moltbook
+async function loadAgentStats() {
+  try {
+    console.log('[Dashboard] Loading agent stats from Moltbook...');
+    
+    const result = await window.electronAPI.getAgentStatus();
+    
+    if (!result.success) {
+      console.warn('[Dashboard] Failed to load agent stats:', result.error);
+      // Show default values instead of "Loading..."
+      const agentStatsContainer = document.getElementById('agentStats');
+      if (agentStatsContainer) {
+        agentStatsContainer.innerHTML = `
+          <div class="stat">
+            <span class="label">Karma</span>
+            <span class="value">0</span>
+          </div>
+          <div class="stat">
+            <span class="label">Followers</span>
+            <span class="value">0</span>
+          </div>
+          <div class="stat">
+            <span class="label">Following</span>
+            <span class="value">0</span>
+          </div>
+        `;
+      }
+      return;
+    }
+    
+    console.log('[Dashboard] Agent stats:', result.agent);
+    
+    // Update agent stats in Dashboard
+    const agentStatsContainer = document.getElementById('agentStats');
+    if (agentStatsContainer && result.agent) {
+      const agent = result.agent;
+      agentStatsContainer.innerHTML = `
+        <div class="stat">
+          <span class="label">Karma</span>
+          <span class="value">${agent.karma || 0}</span>
+        </div>
+        <div class="stat">
+          <span class="label">Followers</span>
+          <span class="value">${agent.followers || 0}</span>
+        </div>
+        <div class="stat">
+          <span class="label">Following</span>
+          <span class="value">${agent.following || 0}</span>
+        </div>
+      `;
+      console.log('[Dashboard] ✅ Agent stats updated:', {
+        karma: agent.karma,
+        followers: agent.followers,
+        following: agent.following
+      });
+      
+      // CRITICAL: Also update Persona page karma display
+      const karmaValue = document.getElementById('agentKarma');
+      if (karmaValue) {
+        karmaValue.textContent = agent.karma || 0;
+        console.log('[Dashboard] ✅ Updated Persona page karma:', agent.karma);
+      }
+      
+      const progressFill = document.getElementById('progressFill');
+      const progressText = document.getElementById('progressText');
+      if (progressFill && progressText) {
+        const karma = agent.karma || 0;
+        const progress = Math.min((karma % 100), 100);
+        progressFill.style.width = `${progress}%`;
+        progressText.textContent = `${karma % 100} / 100 karma`;
+        console.log('[Dashboard] ✅ Updated progress bar:', progress + '%');
+      }
+    } else {
+      console.warn('[Dashboard] Agent stats container not found or no agent data');
+    }
+  } catch (error) {
+    console.error('[Dashboard] Failed to load agent stats:', error);
   }
 }
 
@@ -551,6 +679,28 @@ function setupEventListeners() {
   const previewDraftBtn = document.getElementById('previewDraftBtn');
   const draftBody = document.getElementById('draftBody');
 
+  // Track current draft ID to prevent duplicates
+  let currentDraftId = null;
+
+  // Load submolts for smart selector
+  loadSubmolts();
+
+  // Setup submolt search
+  const submoltSearch = document.getElementById('submoltSearch');
+  if (submoltSearch) {
+    submoltSearch.addEventListener('input', (e) => {
+      filterSubmolts(e.target.value);
+    });
+  }
+
+  // Setup create submolt button
+  const createSubmoltBtn = document.getElementById('createSubmoltBtn');
+  if (createSubmoltBtn) {
+    createSubmoltBtn.addEventListener('click', () => {
+      showCreateSubmoltDialog();
+    });
+  }
+
   if (saveDraftBtn) {
     saveDraftBtn.addEventListener('click', async () => {
       const submolt = document.getElementById('submolt').value;
@@ -564,19 +714,34 @@ function setupEventListeners() {
       }
 
       try {
+        // Prepare the final body with WATAM suffix if needed
+        const finalBody = includeWatam ? body + '\n\nLearn more at wearetheartmakers.com' : body;
+        
+        // CRITICAL: Check if draft already exists with same title/body (check BOTH with and without WATAM)
+        const existingDrafts = await window.electronAPI.getDrafts();
+        const duplicate = existingDrafts.success && existingDrafts.drafts.find(d => 
+          d.title === topic && (d.body === finalBody || d.body === body)
+        );
+        
+        // Use existing draft ID if editing or duplicate found
+        const draftId = currentDraftId || (duplicate ? duplicate.id : Date.now());
+
         const draft = {
-          id: Date.now(),
+          id: draftId,
           submolt,
           title: topic,
-          body: includeWatam ? body + '\n\nLearn more at wearetheartmakers.com' : body,
+          body: finalBody,
           createdAt: new Date().toISOString(),
         };
 
         const result = await window.electronAPI.saveDraft(draft);
         if (result.success) {
-          showNotification('Draft saved successfully!', 'success');
+          showNotification(duplicate ? 'Draft updated!' : 'Draft saved successfully!', 'success');
+          
+          // Clear form and reset draft ID for next draft
           document.getElementById('topic').value = '';
           document.getElementById('draftBody').value = '';
+          currentDraftId = null; // Reset for next draft
         }
       } catch (error) {
         showNotification('Failed to save draft', 'error');
@@ -609,25 +774,16 @@ function setupEventListeners() {
     });
   }
 
-  // Auto-save draft every 30 seconds
+  // Auto-save draft every 30 seconds - DISABLED to prevent duplicates
+  // Users should manually save drafts using the Save Draft button
   if (draftBody) {
     draftBody.addEventListener('input', () => {
+      // Clear any existing auto-save interval
       clearInterval(autoSaveInterval);
-      autoSaveInterval = setInterval(async () => {
-        const topic = document.getElementById('topic').value;
-        const body = document.getElementById('draftBody').value;
-        if (topic && body) {
-          const draft = {
-            id: 'autosave',
-            submolt: document.getElementById('submolt').value,
-            title: topic,
-            body,
-            createdAt: new Date().toISOString(),
-          };
-          await window.electronAPI.saveDraft(draft);
-          console.log('Auto-saved draft');
-        }
-      }, 30000);
+      
+      // DISABLED: Auto-save causes duplicate drafts
+      // Users should use "Save Draft" button instead
+      console.log('[Draft] Auto-save disabled - use Save Draft button');
     });
   }
 
@@ -718,6 +874,91 @@ function setupEventListeners() {
         showNotification('✅ Posts loaded!', 'success');
       } catch (error) {
         console.error('[App] Error loading posts:', error);
+        showNotification(`❌ Error: ${error.message}`, 'error');
+      }
+    });
+  }
+  
+  // Fix URLs button - for posts with undefined URLs
+  const fixUrlsBtn = document.getElementById('fixUrlsBtn');
+  if (fixUrlsBtn) {
+    fixUrlsBtn.addEventListener('click', async () => {
+      if (!confirm('This will attempt to fix undefined URLs for old posts.\n\nNote: This only works if the post ID is valid.\n\nContinue?')) {
+        return;
+      }
+      
+      try {
+        showNotification('🔧 Fixing URLs...', 'info');
+        console.log('[App] Fix URLs button clicked');
+        
+        const result = await window.electronAPI.getPosts();
+        if (!result.success || !result.posts) {
+          showNotification('❌ Failed to load posts', 'error');
+          return;
+        }
+        
+        let fixed = 0;
+        const posts = result.posts;
+        
+        for (const post of posts) {
+          // Fix posts with undefined or null URLs but valid IDs
+          if ((!post.url || post.url.includes('undefined')) && post.id && post.id !== 'undefined') {
+            post.url = `https://www.moltbook.com/post/${post.id}`;
+            fixed++;
+            console.log('[App] Fixed URL for post:', post.id, '→', post.url);
+          }
+        }
+        
+        if (fixed > 0) {
+          // Save updated posts directly to store
+          const saveResult = await window.electronAPI.savePosts(posts);
+          if (saveResult.success) {
+            showNotification(`✅ Fixed ${fixed} post URL(s)!`, 'success');
+            
+            // CRITICAL: Force reload posts to show updated URLs
+            console.log('[App] Reloading posts to show updated URLs...');
+            await new Promise(resolve => setTimeout(resolve, 500)); // Wait for save to complete
+            await loadPosts();
+            console.log('[App] ✅ Posts reloaded with updated URLs');
+          } else {
+            showNotification(`⚠️ Fixed ${fixed} URLs but failed to save: ${saveResult.error}`, 'warning');
+          }
+        } else {
+          showNotification('ℹ️ No URLs needed fixing', 'info');
+        }
+      } catch (error) {
+        console.error('[App] Error fixing URLs:', error);
+        showNotification(`❌ Error: ${error.message}`, 'error');
+      }
+    });
+  }
+
+  // Clean Queue button - removes orphaned queue items
+  const cleanQueueBtn = document.getElementById('cleanQueueBtn');
+  if (cleanQueueBtn) {
+    cleanQueueBtn.addEventListener('click', async () => {
+      try {
+        showNotification('🧹 Cleaning queue...', 'info');
+        console.log('[App] Clean Queue button clicked');
+        
+        const result = await window.electronAPI.cleanQueue();
+        
+        if (result.success) {
+          const removed = result.removed || 0;
+          if (removed > 0) {
+            showNotification(`✅ Removed ${removed} orphaned queue item(s)!`, 'success');
+            
+            // Reload drafts and update queue status
+            await loadDrafts();
+            await updatePostQueueStatus();
+          } else {
+            showNotification('✅ Queue is clean - no orphaned items found', 'success');
+          }
+        } else {
+          showNotification(`❌ Failed to clean queue: ${result.error}`, 'error');
+        }
+      } catch (error) {
+        console.error('[App] Error cleaning queue:', error);
         showNotification(`❌ Error: ${error.message}`, 'error');
       }
     });
@@ -897,6 +1138,61 @@ Key Guidelines:
       loadDashboard();
     }
   });
+  
+  // Listen for duplicate post detection
+  window.electronAPI.onQueueDuplicateDetected((data) => {
+    console.log('[App] ⚠️ Duplicate post detected:', data.title);
+    showNotification(
+      `⚠️ Duplicate Detected: "${data.title}" was already published. Removed from queue.`,
+      'warning'
+    );
+    
+    // Refresh drafts and posts
+    if (document.getElementById('drafts').classList.contains('active')) {
+      loadDrafts();
+    }
+    if (document.getElementById('posts').classList.contains('active')) {
+      loadPosts();
+    }
+  });
+  
+  // Listen for rate limit updates (after manual post)
+  window.electronAPI.onRateLimitUpdated((data) => {
+    console.log('[App] Rate limit updated:', data);
+    if (data.nextAllowedTime) {
+      showRateLimitCountdown(data.nextAllowedTime);
+    }
+  });
+
+  // Listen for mentions found
+  window.electronAPI.onMentionsFound((data) => {
+    console.log('[App] 🔔 Mentions found:', data);
+    showNotification(
+      `🔔 ${data.count} new mention${data.count > 1 ? 's' : ''}! Agent will reply with priority.`,
+      'info'
+    );
+    
+    // Update dashboard if visible
+    if (document.getElementById('dashboard').classList.contains('active')) {
+      loadDashboard();
+    }
+  });
+
+  // Listen for DM activity
+  window.electronAPI.onDMActivity((data) => {
+    console.log('[App] 💬 DM activity:', data);
+    if (data.has_activity) {
+      showNotification(
+        `💬 ${data.summary}`,
+        'info'
+      );
+      
+      // Update dashboard if visible
+      if (document.getElementById('dashboard').classList.contains('active')) {
+        loadDashboard();
+      }
+    }
+  });
 }
 
 // Helper functions
@@ -948,24 +1244,368 @@ function showStatus(element, message, type) {
 }
 
 // Drafts Management
+let submoltsCache = null;
+
+async function loadSubmolts() {
+  try {
+    console.log('[Submolts] Loading submolts...');
+    const result = await window.electronAPI.getSubmolts();
+    
+    console.log('[Submolts] API result:', result);
+    
+    if (result.success && result.submolts) {
+      // Check if submolts is an array
+      if (Array.isArray(result.submolts)) {
+        // FILTER: Show submolts with 5+ subscribers (more inclusive)
+        const activeSubmolts = result.submolts.filter(s => s.subscriber_count >= 5);
+        
+        // Add essential submolts if missing
+        const essentialSubmolts = [
+          { name: 'general', display_name: 'General', count: 150 },
+          { name: 'ai', display_name: 'AI', count: 120 },
+          { name: 'crypto', display_name: 'Crypto', count: 100 },
+          { name: 'technology', display_name: 'Technology', count: 110 },
+          { name: 'art', display_name: 'Art', count: 80 },
+          { name: 'music', display_name: 'Music', count: 75 },
+          { name: 'finance', display_name: 'Finance', count: 60 },
+          { name: 'gaming', display_name: 'Gaming', count: 55 }
+        ];
+        
+        essentialSubmolts.forEach(essential => {
+          if (!activeSubmolts.find(s => s.name === essential.name)) {
+            console.log('[Submolts] Adding missing essential submolt:', essential.name);
+            activeSubmolts.push({
+              name: essential.name,
+              display_name: essential.display_name,
+              subscriber_count: essential.count
+            });
+          }
+        });
+        
+        submoltsCache = activeSubmolts;
+        console.log('[Submolts] ✅ Loaded', submoltsCache.length, 'active submolts (5+ subscribers)');
+        populateSubmoltDropdown();
+      } else {
+        console.error('[Submolts] ❌ submolts is not an array:', typeof result.submolts);
+        console.log('[Submolts] Using default submolts');
+        useDefaultSubmolts();
+      }
+    } else {
+      console.warn('[Submolts] Failed to load submolts, using defaults');
+      useDefaultSubmolts();
+    }
+  } catch (error) {
+    console.error('[Submolts] Error loading submolts:', error);
+    useDefaultSubmolts();
+  }
+}
+
+function useDefaultSubmolts() {
+  // Use REAL popular submolts from Moltbook (based on actual usage)
+  submoltsCache = [
+    // Most Popular (100+ subscribers)
+    { name: 'general', display_name: 'General', subscriber_count: 150 },
+    { name: 'ai', display_name: 'AI', subscriber_count: 120 },
+    { name: 'technology', display_name: 'Technology', subscriber_count: 110 },
+    { name: 'crypto', display_name: 'Crypto', subscriber_count: 100 },
+    
+    // Very Popular (70-100 subscribers)
+    { name: 'art', display_name: 'Art', subscriber_count: 85 },
+    { name: 'music', display_name: 'Music', subscriber_count: 80 },
+    { name: 'programming', display_name: 'Programming', subscriber_count: 75 },
+    { name: 'finance', display_name: 'Finance', subscriber_count: 70 },
+    
+    // Popular (40-70 subscribers)
+    { name: 'gaming', display_name: 'Gaming', subscriber_count: 65 },
+    { name: 'science', display_name: 'Science', subscriber_count: 60 },
+    { name: 'philosophy', display_name: 'Philosophy', subscriber_count: 55 },
+    { name: 'business', display_name: 'Business', subscriber_count: 50 },
+    { name: 'design', display_name: 'Design', subscriber_count: 45 },
+    { name: 'photography', display_name: 'Photography', subscriber_count: 40 },
+    
+    // Growing (20-40 subscribers)
+    { name: 'food', display_name: 'Food', subscriber_count: 35 },
+    { name: 'travel', display_name: 'Travel', subscriber_count: 32 },
+    { name: 'books', display_name: 'Books', subscriber_count: 30 },
+    { name: 'movies', display_name: 'Movies', subscriber_count: 28 },
+    { name: 'fitness', display_name: 'Fitness', subscriber_count: 25 },
+    { name: 'health', display_name: 'Health', subscriber_count: 22 },
+    { name: 'education', display_name: 'Education', subscriber_count: 20 }
+  ];
+  console.log('[Submolts] ✅ Using', submoltsCache.length, 'curated popular submolts');
+  populateSubmoltDropdown();
+}
+
+function populateSubmoltDropdown() {
+  const select = document.getElementById('submolt');
+  if (!select || !submoltsCache || !Array.isArray(submoltsCache)) {
+    console.warn('[Submolts] Cannot populate dropdown - invalid data');
+    return;
+  }
+  
+  // Clear existing options
+  select.innerHTML = '';
+  
+  // Sort submolts by subscriber count
+  const veryPopular = submoltsCache
+    .filter(s => s.subscriber_count >= 100)
+    .sort((a, b) => b.subscriber_count - a.subscriber_count);
+  
+  const popular = submoltsCache
+    .filter(s => s.subscriber_count >= 40 && s.subscriber_count < 100)
+    .sort((a, b) => b.subscriber_count - a.subscriber_count);
+  
+  const growing = submoltsCache
+    .filter(s => s.subscriber_count < 40)
+    .sort((a, b) => b.subscriber_count - a.subscriber_count);
+  
+  // Add very popular group (100+)
+  if (veryPopular.length > 0) {
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = '🔥 Most Popular';
+    veryPopular.forEach(s => {
+      const option = document.createElement('option');
+      option.value = s.name;
+      option.textContent = `${s.display_name} (${s.subscriber_count}+ members)`;
+      optgroup.appendChild(option);
+    });
+    select.appendChild(optgroup);
+  }
+  
+  // Add popular group (40-99)
+  if (popular.length > 0) {
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = '⭐ Popular';
+    popular.forEach(s => {
+      const option = document.createElement('option');
+      option.value = s.name;
+      option.textContent = `${s.display_name} (${s.subscriber_count} members)`;
+      optgroup.appendChild(option);
+    });
+    select.appendChild(optgroup);
+  }
+  
+  // Add growing group (<40)
+  if (growing.length > 0) {
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = '📚 More Submolts';
+    growing.forEach(s => {
+      const option = document.createElement('option');
+      option.value = s.name;
+      option.textContent = `${s.display_name} (${s.subscriber_count})`;
+      optgroup.appendChild(option);
+    });
+    select.appendChild(optgroup);
+  }
+  
+  console.log('[Submolts] ✅ Populated dropdown with', select.options.length, 'options');
+  console.log('[Submolts] Categories: 🔥', veryPopular.length, '⭐', popular.length, '📚', growing.length);
+}
+
+function filterSubmolts(searchTerm) {
+  const select = document.getElementById('submolt');
+  if (!select) return;
+  
+  const options = select.querySelectorAll('option');
+  const optgroups = select.querySelectorAll('optgroup');
+  
+  if (!searchTerm) {
+    // Show all
+    options.forEach(opt => opt.style.display = '');
+    optgroups.forEach(grp => grp.style.display = '');
+    return;
+  }
+  
+  const term = searchTerm.toLowerCase();
+  
+  options.forEach(opt => {
+    const text = opt.textContent.toLowerCase();
+    const matches = text.includes(term);
+    opt.style.display = matches ? '' : 'none';
+  });
+  
+  // Hide empty optgroups
+  optgroups.forEach(grp => {
+    const visibleOptions = Array.from(grp.querySelectorAll('option'))
+      .filter(opt => opt.style.display !== 'none');
+    grp.style.display = visibleOptions.length > 0 ? '' : 'none';
+  });
+}
+
+// Create Submolt Dialog
+function showCreateSubmoltDialog() {
+  // Create modal dialog
+  const dialog = document.createElement('div');
+  dialog.className = 'modal-overlay';
+  dialog.innerHTML = `
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>➕ Create New Submolt</h3>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="newSubmoltName">Submolt Name *</label>
+          <input type="text" id="newSubmoltName" class="form-control" placeholder="crypto, aithoughts, debuggingwins" pattern="[a-z0-9]+" />
+          <small style="color: var(--text-tertiary);">Lowercase letters and numbers only, no spaces</small>
+        </div>
+        <div class="form-group">
+          <label for="newSubmoltDisplayName">Display Name *</label>
+          <input type="text" id="newSubmoltDisplayName" class="form-control" placeholder="Crypto, AI Thoughts, Debugging Wins" />
+        </div>
+        <div class="form-group">
+          <label for="newSubmoltDescription">Description (optional)</label>
+          <textarea id="newSubmoltDescription" class="form-control" rows="3" placeholder="A place for..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitCreateSubmolt()">Create Submolt</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(dialog);
+  
+  // Focus first input
+  setTimeout(() => {
+    document.getElementById('newSubmoltName').focus();
+  }, 100);
+  
+  // Auto-fill display name from name
+  document.getElementById('newSubmoltName').addEventListener('input', (e) => {
+    const name = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '');
+    e.target.value = name;
+    
+    // Auto-generate display name
+    const displayNameInput = document.getElementById('newSubmoltDisplayName');
+    if (!displayNameInput.value || displayNameInput.dataset.autoFilled) {
+      displayNameInput.value = name.charAt(0).toUpperCase() + name.slice(1);
+      displayNameInput.dataset.autoFilled = 'true';
+    }
+  });
+  
+  document.getElementById('newSubmoltDisplayName').addEventListener('input', () => {
+    delete document.getElementById('newSubmoltDisplayName').dataset.autoFilled;
+  });
+}
+
+window.submitCreateSubmolt = async function() {
+  const nameInput = document.getElementById('newSubmoltName');
+  const displayNameInput = document.getElementById('newSubmoltDisplayName');
+  const descriptionInput = document.getElementById('newSubmoltDescription');
+  
+  if (!nameInput || !displayNameInput) {
+    console.error('[Submolt] Input elements not found');
+    return;
+  }
+  
+  const name = nameInput.value.trim();
+  const displayName = displayNameInput.value.trim();
+  const description = descriptionInput ? descriptionInput.value.trim() : '';
+  
+  if (!name) {
+    showNotification('❌ Submolt name is required', 'error');
+    nameInput.focus();
+    return;
+  }
+  
+  if (!/^[a-z0-9]+$/.test(name)) {
+    showNotification('❌ Submolt name must be lowercase letters and numbers only', 'error');
+    nameInput.focus();
+    return;
+  }
+  
+  if (!displayName) {
+    showNotification('❌ Display name is required', 'error');
+    displayNameInput.focus();
+    return;
+  }
+  
+  // Close dialog
+  const overlay = document.querySelector('.modal-overlay');
+  if (overlay) {
+    overlay.remove();
+  }
+  
+  // Create submolt
+  await createSubmolt(name, displayName, description);
+};
+
+async function createSubmolt(name, displayName, description) {
+  try {
+    showNotification('Creating submolt...', 'info');
+    
+    const result = await window.electronAPI.createSubmolt({
+      name,
+      displayName,
+      description
+    });
+    
+    if (result.success) {
+      showNotification(`✅ Submolt "m/${name}" created successfully!`, 'success');
+      
+      // Reload submolts to include the new one
+      await loadSubmolts();
+      
+      // Select the new submolt
+      const select = document.getElementById('submolt');
+      if (select) {
+        select.value = name;
+      }
+    } else {
+      showNotification(`❌ Failed to create submolt: ${result.error}`, 'error');
+    }
+  } catch (error) {
+    showNotification(`❌ Error: ${error.message}`, 'error');
+  }
+}
+
 async function loadDrafts() {
   try {
+    // CRITICAL: Clean orphaned queue items FIRST and WAIT for completion
+    console.log('[Drafts] Cleaning orphaned queue items...');
+    const cleanResult = await window.electronAPI.cleanQueue();
+    console.log('[Drafts] Clean result:', cleanResult);
+    
+    // Now get fresh data AFTER cleanup
     const result = await window.electronAPI.getDrafts();
     const queueResult = await window.electronAPI.getPostQueue();
     const container = document.getElementById('draftsContainer');
     
     if (!result.success || !result.drafts || result.drafts.length === 0) {
       container.innerHTML = '<p class="empty-state">No saved drafts yet. Create one in New Draft!</p>';
+      // Update queue status
+      await updatePostQueueStatus();
       return;
     }
 
-    const queue = queueResult.success ? queueResult.queue : [];
+    // CRITICAL: Filter only queued items that have matching drafts, then sort by queuedAt (oldest first)
+    const allQueuedItems = queueResult.success ? 
+      queueResult.queue.filter(q => q.status === 'queued') : [];
+    
+    // Only include queue items that have matching drafts
+    const queue = allQueuedItems
+      .filter(q => result.drafts.some(d => d.title === q.title && d.body === q.body))
+      .sort((a, b) => new Date(a.queuedAt) - new Date(b.queuedAt));
+    
+    console.log('[Drafts] Total queued items:', allQueuedItems.length);
+    console.log('[Drafts] Queue items with drafts:', queue.length);
+    console.log('[Drafts] Queue after filter & sort:', queue.map((q, idx) => ({ 
+      position: idx + 1,
+      title: q.title.substring(0, 30), 
+      queuedAt: q.queuedAt 
+    })));
     
     container.innerHTML = result.drafts.map(draft => {
-      const isQueued = queue.some(q => q.title === draft.title && q.body === draft.body && q.status === 'queued');
+      // Find matching queue item
       const queueItem = queue.find(q => q.title === draft.title && q.body === draft.body);
+      const isQueued = !!queueItem;
       
-      const queuePosition = isQueued && queueItem ? queue.filter(q => q.status === 'queued').indexOf(queueItem) + 1 : 0;
+      // Calculate position in queue (1-based) - use findIndex for accuracy
+      const queuePosition = isQueued ? queue.findIndex(q => q.title === draft.title && q.body === draft.body) + 1 : 0;
+      
+      console.log('[Drafts] Draft:', draft.title.substring(0, 30), 'Position:', queuePosition, 'Queued:', isQueued, 'Total in queue:', queue.length);
       
       return `
       <div class="draft-card" data-id="${draft.id}" data-queue-position="${queuePosition}">
@@ -994,10 +1634,10 @@ async function loadDrafts() {
               <button class="btn btn-xs btn-secondary move-up" data-id="${draft.id}" ${queuePosition === 1 ? 'disabled' : ''}>
                 ↑ Move Up
               </button>
-              <button class="btn btn-xs btn-secondary move-down" data-id="${draft.id}">
+              <button class="btn btn-xs btn-secondary move-down" data-id="${draft.id}" ${queuePosition === queue.length ? 'disabled' : ''}>
                 ↓ Move Down
               </button>
-              <span class="queue-info">Position: ${queuePosition} of ${queue.filter(q => q.status === 'queued').length}</span>
+              <span class="queue-info">Position: ${queuePosition} of ${queue.length}</span>
             </div>
           ` : ''}
         </div>
@@ -1129,9 +1769,120 @@ async function loadDrafts() {
         }
       });
     });
+    
+    // Add drag-drop functionality for queue reordering
+    setupDragAndDrop();
+    
+    // Update queue status display
+    await updatePostQueueStatus();
   } catch (error) {
     console.error('Failed to load drafts:', error);
   }
+}
+
+// Drag and Drop for Queue Reordering
+let draggedElement = null;
+let reorderTimeout = null;
+
+function setupDragAndDrop() {
+  const draftCards = document.querySelectorAll('.draft-card');
+  
+  draftCards.forEach(card => {
+    // Only enable drag for queued items
+    const queuePosition = parseInt(card.dataset.queuePosition);
+    if (queuePosition > 0) {
+      card.setAttribute('draggable', 'true');
+      card.style.cursor = 'grab';
+      
+      card.addEventListener('dragstart', handleDragStart);
+      card.addEventListener('dragend', handleDragEnd);
+    }
+    
+    card.addEventListener('dragover', handleDragOver);
+    card.addEventListener('drop', handleDrop);
+  });
+}
+
+function handleDragStart(e) {
+  draggedElement = e.target.closest('.draft-card');
+  e.dataTransfer.effectAllowed = 'move';
+  draggedElement.classList.add('dragging');
+  draggedElement.style.cursor = 'grabbing';
+}
+
+function handleDragEnd(e) {
+  draggedElement.classList.remove('dragging');
+  draggedElement.style.cursor = 'grab';
+  
+  // Remove all drag-over classes
+  document.querySelectorAll('.draft-card').forEach(card => {
+    card.classList.remove('drag-over');
+  });
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  
+  const afterElement = getDragAfterElement(e.currentTarget.parentElement, e.clientY);
+  const container = e.currentTarget.parentElement;
+  
+  if (afterElement == null) {
+    container.appendChild(draggedElement);
+  } else {
+    container.insertBefore(draggedElement, afterElement);
+  }
+}
+
+async function handleDrop(e) {
+  e.preventDefault();
+  
+  // Clear any pending reorder
+  if (reorderTimeout) {
+    clearTimeout(reorderTimeout);
+  }
+  
+  // Debounce: Wait 500ms before saving
+  reorderTimeout = setTimeout(async () => {
+    // Get new order of draft IDs
+    const container = document.getElementById('draftsContainer');
+    const draftCards = Array.from(container.querySelectorAll('.draft-card[data-queue-position]'))
+      .filter(card => parseInt(card.dataset.queuePosition) > 0);
+    const newOrder = draftCards.map(card => card.dataset.id);
+    
+    console.log('[DragDrop] Saving new order:', newOrder);
+    
+    // Save new order to backend
+    try {
+      const result = await window.electronAPI.reorderQueue({ newOrder });
+      if (result.success) {
+        showNotification('✅ Queue reordered', 'success');
+        // Don't reload immediately - let user continue dragging
+      } else {
+        showNotification('❌ Failed to reorder: ' + result.error, 'error');
+        loadDrafts(); // Reload to restore original order
+      }
+    } catch (error) {
+      console.error('[DragDrop] Error:', error);
+      showNotification('❌ Error reordering queue', 'error');
+      loadDrafts();
+    }
+  }, 500);
+}
+
+function getDragAfterElement(container, y) {
+  const draggableElements = [...container.querySelectorAll('.draft-card:not(.dragging)')];
+  
+  return draggableElements.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    
+    if (offset < 0 && offset > closest.offset) {
+      return { offset: offset, element: child };
+    } else {
+      return closest;
+    }
+  }, { offset: Number.NEGATIVE_INFINITY }).element;
 }
 
 // Reply Dialog Management
@@ -1184,8 +1935,9 @@ async function loadPosts() {
     }
 
     console.log('[App] Rendering posts...');
+    console.log('[App] Posts data:', JSON.stringify(result.posts.map(p => ({ id: p.id, title: p.title, url: p.url })), null, 2));
     container.innerHTML = result.posts.map(post => {
-      console.log('[App] Rendering post:', post.id, post.title);
+      console.log('[App] Rendering post:', post.id, post.title, 'URL:', post.url);
       return `
       <div class="post-card" data-id="${post.id}">
         <div class="post-header">
@@ -1310,14 +2062,27 @@ async function loadPosts() {
 async function updatePostQueueStatus() {
   try {
     const result = await window.electronAPI.getPostQueue();
+    const draftsResult = await window.electronAPI.getDrafts();
     const queueCountElement = document.getElementById('queueCount');
     const queueStatusElement = document.getElementById('postQueueStatus');
     
-    if (result.success && queueCountElement && queueStatusElement) {
-      const queuedPosts = result.queue.filter(p => p.status === 'queued').length;
-      queueCountElement.textContent = queuedPosts;
+    if (result.success && draftsResult.success && queueCountElement && queueStatusElement) {
+      // CRITICAL: Only count queue items that have matching drafts
+      const allQueuedPosts = result.queue.filter(p => p.status === 'queued');
+      const drafts = draftsResult.drafts || [];
       
-      if (queuedPosts > 0) {
+      // Filter to only include queue items with matching drafts
+      const queuedPostsWithDrafts = allQueuedPosts.filter(q => 
+        drafts.some(d => d.title === q.title && d.body === q.body)
+      );
+      
+      const queuedCount = queuedPostsWithDrafts.length;
+      
+      console.log('[Queue Status] Total queued:', allQueuedPosts.length, 'With drafts:', queuedCount);
+      
+      queueCountElement.textContent = queuedCount;
+      
+      if (queuedCount > 0) {
         queueStatusElement.classList.add('has-queue');
       } else {
         queueStatusElement.classList.remove('has-queue');
@@ -1332,9 +2097,13 @@ async function loadPostComments(postId) {
   try {
     console.log('[App] Loading comments for post:', postId);
     
-    if (!postId) {
-      console.error('[App] No post ID provided!');
-      showNotification('❌ Error: No post ID', 'error');
+    if (!postId || postId === 'undefined') {
+      console.error('[App] Invalid post ID:', postId);
+      const commentsDiv = document.getElementById(`comments-${postId}`);
+      if (commentsDiv) {
+        commentsDiv.innerHTML = `<p class="empty-state error">❌ Invalid post ID. Try using "Fix URLs" button to fix old posts.</p>`;
+      }
+      showNotification('❌ Invalid post ID. Use "Fix URLs" button to fix old posts.', 'error');
       return;
     }
     
@@ -1352,9 +2121,28 @@ async function loadPostComments(postId) {
     
     if (!result.success) {
       console.error('[App] Failed to load comments:', result.error);
-      commentsDiv.innerHTML = `<p class="empty-state error">❌ Failed to load comments: ${result.error}</p>`;
-      showNotification('❌ Failed to load comments: ' + result.error, 'error');
+      
+      // Better error messages for common issues
+      let errorMessage = result.error;
+      if (result.error.includes('404') || result.error.includes('not found')) {
+        errorMessage = '❌ Post not found on Moltbook. This post may have been deleted or the URL is incorrect. Try using "Fix URLs" button.';
+      } else if (result.error.includes('timeout')) {
+        errorMessage = '⏱️ Moltbook server is slow. Please try again later.';
+      }
+      
+      commentsDiv.innerHTML = `<p class="empty-state error">${errorMessage}</p>`;
+      showNotification(errorMessage, 'error');
       return;
+    }
+    
+    // CRITICAL: Update comment count in the post card
+    const postCard = document.querySelector(`[data-id="${postId}"]`);
+    if (postCard && result.comments) {
+      const commentCountSpan = postCard.querySelector('.post-stats span:nth-child(2)');
+      if (commentCountSpan) {
+        commentCountSpan.textContent = `💬 ${result.comments.length} comments`;
+        console.log('[App] ✅ Updated comment count in UI:', result.comments.length);
+      }
     }
     
     if (!result.comments || result.comments.length === 0) {

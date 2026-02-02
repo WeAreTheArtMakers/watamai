@@ -251,11 +251,11 @@ async function checkStatus() {
         hideClaimSection();
         showActiveSection();
       } else if (result.status === 'claim_pending') {
-        showError('⚠️ Claim not completed yet. Please visit the claim URL and complete the verification process on Moltbook.');
+        showError('⚠️ Claim not completed. Visit the claim URL above and complete verification on Moltbook.');
       } else if (result.status === 'error') {
-        showError('❌ Agent status: error. This means the claim is not completed. Please visit the claim URL above, complete all verification steps on Moltbook, then click "Check Status" again.');
+        showError('❌ Agent not verified. Complete the claim process on Moltbook, wait a few minutes, then click "Check Status" again.');
       } else {
-        showError('⚠️ Agent status: ' + result.status + '. Please check the claim process.');
+        showError('⚠️ Agent status: ' + result.status + '. Check the claim process on Moltbook.');
       }
     } else {
       // Show more helpful error messages

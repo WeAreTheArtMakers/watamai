@@ -137,6 +137,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Posts
   getPosts: () => ipcRenderer.invoke('get-posts'),
+  savePosts: (posts) => ipcRenderer.invoke('save-posts', posts),
   syncPosts: () => ipcRenderer.invoke('sync-posts'),
   getPostComments: (postId) => ipcRenderer.invoke('get-post-comments', postId),
   replyToPost: (data) => ipcRenderer.invoke('reply-to-post', data),
@@ -150,6 +151,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeFromPostQueue: (id) => ipcRenderer.invoke('remove-from-post-queue', id),
   toggleAutoPost: (data) => ipcRenderer.invoke('toggle-auto-post', data),
   reorderQueue: (data) => ipcRenderer.invoke('reorder-queue', data),
+  cleanQueue: () => ipcRenderer.invoke('clean-queue'),
 
   // Logs
   getLogs: () => ipcRenderer.invoke('get-logs'),
@@ -165,6 +167,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   generateReply: (data) => ipcRenderer.invoke('generate-reply', data),
   getOllamaModels: () => ipcRenderer.invoke('get-ollama-models'),
   getPostDetails: (postId) => ipcRenderer.invoke('get-post-details', postId),
+  getAgentStatus: () => ipcRenderer.invoke('get-agent-status'),
 
   // Moltbook Identity System - NEW
   moltbookGenerateIdentityToken: () => ipcRenderer.invoke('moltbook-generate-identity-token'),
@@ -192,4 +195,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onShowQuickStart: (callback) => ipcRenderer.on('show-quickstart', () => callback()),
   onAgentStatusUpdate: (callback) => ipcRenderer.on('agent-status-update', (event, data) => callback(data)),
   onQueuePostPublished: (callback) => ipcRenderer.on('queue-post-published', (event, data) => callback(data)),
+  onQueueDuplicateDetected: (callback) => ipcRenderer.on('queue-duplicate-detected', (event, data) => callback(data)),
+  onRateLimitUpdated: (callback) => ipcRenderer.on('rate-limit-updated', (event, data) => callback(data)),
+  onMentionsFound: (callback) => ipcRenderer.on('mentions-found', (event, data) => callback(data)),
+  onDMActivity: (callback) => ipcRenderer.on('dm-activity', (event, data) => callback(data)),
+
+  // Submolts
+  getSubmolts: () => ipcRenderer.invoke('get-submolts'),
+  createSubmolt: (data) => ipcRenderer.invoke('create-submolt', data),
 });
