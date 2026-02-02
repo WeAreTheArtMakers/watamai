@@ -96,6 +96,22 @@ async function processPostQueue() {
         
         store.savePost(publishedPost);
         
+        // Delete matching draft if exists
+        try {
+          const drafts = store.getDrafts();
+          const matchingDraft = drafts.find(d => 
+            d.title === postToProcess.title && d.body === postToProcess.body
+          );
+          
+          if (matchingDraft) {
+            console.log('[Queue] Found matching draft to delete:', matchingDraft.id);
+            store.deleteDraft(matchingDraft.id);
+            console.log('[Queue] ✅ Draft deleted from Saved Drafts');
+          }
+        } catch (draftError) {
+          console.warn('[Queue] Could not delete draft:', draftError.message);
+        }
+        
         // Remove from queue
         store.removeFromPostQueue(postToProcess.id);
         
@@ -2056,6 +2072,25 @@ ipcMain.handle('publish-post', async (event, data) => {
     
     store.savePost(post);
 
+    // Delete matching draft if exists (by title and body match)
+    try {
+      const drafts = store.getDrafts();
+      const matchingDraft = drafts.find(d => 
+        d.title === data.title && d.body === data.body
+      );
+      
+      if (matchingDraft) {
+        console.log('[Publish] Found matching draft to delete:', matchingDraft.id);
+        store.deleteDraft(matchingDraft.id);
+        console.log('[Publish] ✅ Draft deleted from Saved Drafts');
+      } else {
+        console.log('[Publish] No matching draft found to delete');
+      }
+    } catch (draftError) {
+      console.warn('[Publish] Could not delete draft:', draftError.message);
+      // Don't fail the publish if draft deletion fails
+    }
+
     // Set rate limit info for successful posts (Moltbook has 30-minute limit)
     const rateLimitInfo = {
       timestamp: new Date().toISOString(),
@@ -2742,6 +2777,10 @@ ipcMain.handle('reply-to-post', async (event, { postId, body }) => {
     console.log('[Reply] ========================================');
     console.log('[Reply] Replying to post:', postId);
     console.log('[Reply] Reply body length:', body.length);
+    console.log('[Reply] ⚠️ KNOWN ISSUE: Moltbook API has a bug with comment endpoints');
+    console.log('[Reply] Dynamic routes (/posts/{id}/comments) may fail with "Authentication required"');
+    console.log('[Reply] This is a Moltbook platform issue, not our app issue');
+    console.log('[Reply] See: https://moltbookai.net/en/post/ea614230-ac33-4fa9-8d8a-22088a347930');
     
     const agent = store.getAgent();
     if (!agent) {

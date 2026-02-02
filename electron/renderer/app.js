@@ -887,9 +887,14 @@ Key Guidelines:
       loadPosts();
     }
     
-    // Refresh drafts if on drafts page (to update queue status)
+    // Refresh drafts if on drafts page (to show draft was deleted)
     if (document.getElementById('drafts').classList.contains('active')) {
       loadDrafts();
+    }
+    
+    // Refresh dashboard to show recent activity
+    if (document.getElementById('dashboard').classList.contains('active')) {
+      loadDashboard();
     }
   });
 }
