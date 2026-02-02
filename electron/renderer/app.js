@@ -32,22 +32,32 @@ function showRateLimitCountdown(nextAllowedTime) {
       const timeLeft = nextTime - now;
       
       if (timeLeft <= 0) {
-        // Countdown finished
-        countdownElement.textContent = '✅ Ready!';
+        // Countdown finished - READY TO POST!
+        countdownElement.textContent = '✅ READY TO POST!';
         rateLimitCard.classList.add('ready');
-        document.querySelector('.rate-limit-title').textContent = 'Ready to Post';
-        document.querySelector('.rate-limit-subtitle').textContent = 'You can post again now';
-        document.querySelector('.rate-limit-icon').textContent = '✅';
+        document.querySelector('.rate-limit-title').textContent = '✅ Ready to Post';
+        document.querySelector('.rate-limit-subtitle').textContent = 'Queue will auto-post next draft';
+        document.querySelector('.rate-limit-icon').textContent = '🚀';
         
         clearInterval(rateLimitCountdownInterval);
         
-        // Hide after 5 seconds
+        // Show prominent notification
+        showNotification('🚀 READY TO POST! Queue will auto-post next draft in queue.', 'success');
+        
+        // Trigger queue processor check (it runs every 30 seconds anyway)
+        console.log('[App] ✅ Rate limit expired - queue processor will auto-post next draft');
+        
+        // Hide countdown after 10 seconds
         setTimeout(() => {
           rateLimitStatus.classList.add('hidden');
           rateLimitCard.classList.remove('ready');
-        }, 5000);
+        }, 10000);
         
-        showNotification('✅ You can post again now!', 'success');
+        // Refresh drafts page if visible to show updated queue
+        if (document.getElementById('drafts').classList.contains('active')) {
+          loadDrafts();
+        }
+        
         return;
       }
       
@@ -222,6 +232,7 @@ async function loadPageData(pageName) {
 // Dashboard
 async function loadDashboard() {
   try {
+    // Load rate limits
     document.getElementById('rateLimits').innerHTML = `
       <div class="stat">
         <span class="label">Posts (last hour)</span>
@@ -233,6 +244,7 @@ async function loadDashboard() {
       </div>
     `;
 
+    // Load security status
     document.getElementById('securityStatus').innerHTML = `
       <div class="stat">
         <span class="label">Sandbox</span>
@@ -243,8 +255,79 @@ async function loadDashboard() {
         <span class="value">0</span>
       </div>
     `;
+    
+    // Load recent activity from logs
+    await loadRecentActivity();
   } catch (error) {
     console.error('Failed to load dashboard:', error);
+  }
+}
+
+// Load recent activity for dashboard
+async function loadRecentActivity() {
+  try {
+    const result = await window.electronAPI.getLogs();
+    const container = document.getElementById('recentActivity');
+    
+    if (!container) {
+      console.error('[Dashboard] Recent activity container not found');
+      return;
+    }
+    
+    if (!result.success || !result.logs || result.logs.length === 0) {
+      container.innerHTML = '<p class="empty-state">No recent activity</p>';
+      return;
+    }
+
+    // Get last 5 activities
+    const recentLogs = result.logs.reverse().slice(0, 5);
+    
+    let html = '<div class="activity-list">';
+    recentLogs.forEach(log => {
+      const time = new Date(log.timestamp);
+      const timeStr = time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      
+      // Determine icon based on action
+      let icon = 'ℹ️';
+      if (log.action.includes('published') || log.action.includes('saved')) icon = '✅';
+      else if (log.action.includes('error') || log.action.includes('failed')) icon = '❌';
+      else if (log.action.includes('queued')) icon = '📋';
+      else if (log.action.includes('replied')) icon = '💬';
+      else if (log.action.includes('started')) icon = '🚀';
+      else if (log.action.includes('stopped')) icon = '⏹️';
+      
+      // Format action text
+      let actionText = log.action.replace(/_/g, ' ').replace(/\./g, ' - ');
+      actionText = actionText.charAt(0).toUpperCase() + actionText.slice(1);
+      
+      // Get details if available
+      let detailsText = '';
+      if (log.details && typeof log.details === 'object') {
+        if (log.details.title) detailsText = log.details.title;
+        else if (log.details.name) detailsText = log.details.name;
+      }
+      
+      html += `
+        <div class="activity-item">
+          <span class="activity-icon">${icon}</span>
+          <div class="activity-content">
+            <div class="activity-action">${actionText}</div>
+            ${detailsText ? `<div class="activity-details">${detailsText}</div>` : ''}
+          </div>
+          <span class="activity-time">${timeStr}</span>
+        </div>
+      `;
+    });
+    html += '</div>';
+    
+    container.innerHTML = html;
+    
+  } catch (error) {
+    console.error('[Dashboard] Failed to load recent activity:', error);
+    const container = document.getElementById('recentActivity');
+    if (container) {
+      container.innerHTML = '<p class="empty-state">Failed to load activity</p>';
+    }
   }
 }
 

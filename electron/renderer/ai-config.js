@@ -899,45 +899,6 @@ async function debugAndFixIssues() {
   }
 }
 
-// Export module functions
-window.aiConfigModule = {
-  initAIConfig,
-  updateModelOptions,
-};
-    let summaryMessage = '🔧 Diagnostic Complete!\n\n';
-    
-    if (issuesFound.length === 0) {
-      summaryMessage += '✅ No issues found! Your agent should be working properly.\n\n';
-      summaryMessage += 'If you\'re still having problems:\n';
-      summaryMessage += '1. Try the "Test Connection" button\n';
-      summaryMessage += '2. Check the console logs for errors\n';
-      summaryMessage += '3. Restart the application';
-    } else {
-      summaryMessage += `❌ Found ${issuesFound.length} issue(s):\n`;
-      issuesFound.forEach((issue, i) => {
-        summaryMessage += `${i + 1}. ${issue}\n`;
-      });
-      
-      if (fixesApplied.length > 0) {
-        summaryMessage += `\n✅ Applied ${fixesApplied.length} fix(es):\n`;
-        fixesApplied.forEach((fix, i) => {
-          summaryMessage += `${i + 1}. ${fix}\n`;
-        });
-        summaryMessage += '\nPlease test your agent again!';
-      } else {
-        summaryMessage += '\n⚠️ No automatic fixes could be applied.';
-        summaryMessage += '\nPlease follow the recommendations above.';
-      }
-    }
-    
-    showAIStatus(summaryMessage, fixesApplied.length > 0 ? 'success' : 'warning');
-    
-    // Show notification
-    if (window.showNotification) {
-      window.showNotification(`Diagnostic complete! Found ${issuesFound.length} issues, applied ${fixesApplied.length} fixes.`, 'info');
-    }
-    
-
 // Send manual reply to specific post URL
 async function sendManualReply() {
   console.log('[AI] 🚀 Send Manual Reply button clicked');

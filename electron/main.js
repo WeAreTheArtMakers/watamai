@@ -2697,6 +2697,46 @@ ipcMain.handle('test-moltbook-connection', async () => {
   }
 });
 
+// Test heartbeat functionality
+ipcMain.handle('test-heartbeat', async () => {
+  try {
+    console.log('[Test] ========================================');
+    console.log('[Test] MOLTBOOK HEARTBEAT TEST');
+    console.log('[Test] ========================================');
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    console.log('[Test] Testing heartbeat with API key:', maskApiKey(apiKey));
+    
+    // Test heartbeat
+    const heartbeatResult = await checkMoltbookStatus(apiKey);
+    
+    console.log('[Test] Heartbeat Result:', heartbeatResult.success ? '✅' : '❌');
+    if (heartbeatResult.success) {
+      console.log('[Test] Agent Name:', heartbeatResult.agent?.name);
+      console.log('[Test] Agent Status:', heartbeatResult.agent?.status);
+      console.log('[Test] Karma:', heartbeatResult.agent?.karma);
+    } else {
+      console.log('[Test] Error:', heartbeatResult.error);
+    }
+    
+    console.log('[Test] ========================================');
+    
+    return { 
+      success: heartbeatResult.success, 
+      agent: heartbeatResult.agent,
+      error: heartbeatResult.error 
+    };
+  } catch (error) {
+    console.error('[Test] ❌ Heartbeat test failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('reply-to-post', async (event, { postId, body }) => {
   try {
     console.log('[Reply] ========================================');
