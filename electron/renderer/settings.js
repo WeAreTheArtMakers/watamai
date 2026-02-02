@@ -683,15 +683,17 @@ function updateIdentityDisplay() {
     document.getElementById('identityTokenValue').value = identityStatus.token;
     document.getElementById('identityTokenDisplay').classList.remove('hidden');
   } else if (identityStatus.hasToken && identityStatus.tokenExpired) {
-    tokenStatusEl.textContent = '⏰ Token expired';
-    tokenStatusEl.style.color = '#f59e0b';
-    tokenExpiryEl.textContent = 'Expired';
-    document.getElementById('identityTokenDisplay').classList.add('hidden');
+    if (tokenStatusEl) tokenStatusEl.textContent = '⏰ Token expired';
+    if (tokenStatusEl) tokenStatusEl.style.color = '#f59e0b';
+    if (tokenExpiryEl) tokenExpiryEl.textContent = 'Expired';
+    const tokenDisplay = document.getElementById('identityTokenDisplay');
+    if (tokenDisplay) tokenDisplay.classList.add('hidden');
   } else {
-    tokenStatusEl.textContent = '❌ No token';
-    tokenStatusEl.style.color = '#ef4444';
-    tokenExpiryEl.textContent = '-';
-    document.getElementById('identityTokenDisplay').classList.add('hidden');
+    if (tokenStatusEl) tokenStatusEl.textContent = '❌ No token';
+    if (tokenStatusEl) tokenStatusEl.style.color = '#ef4444';
+    if (tokenExpiryEl) tokenExpiryEl.textContent = '-';
+    const tokenDisplay = document.getElementById('identityTokenDisplay');
+    if (tokenDisplay) tokenDisplay.classList.add('hidden');
   }
   
   // Enable/disable generate button

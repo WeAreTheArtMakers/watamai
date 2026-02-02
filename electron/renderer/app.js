@@ -877,30 +877,39 @@ async function loadDrafts() {
       const isQueued = queue.some(q => q.title === draft.title && q.body === draft.body && q.status === 'queued');
       const queueItem = queue.find(q => q.title === draft.title && q.body === draft.body);
       
+      const queuePosition = isQueued && queueItem ? queue.filter(q => q.status === 'queued').indexOf(queueItem) + 1 : 0;
+      
       return `
-      <div class="draft-card" data-id="${draft.id}">
+      <div class="draft-card" data-id="${draft.id}" data-queue-position="${queuePosition}">
         <div class="draft-header">
           <h4>${draft.title}</h4>
           <span class="draft-submolt">${draft.submolt}</span>
+          ${isQueued ? `<span class="queue-position-badge">#${queuePosition} in queue</span>` : ''}
         </div>
         <div class="draft-body">${draft.body.substring(0, 200)}${draft.body.length > 200 ? '...' : ''}</div>
         
         <!-- Auto-Post Queue Section -->
-        <div class="auto-post-section">
+        <div class="auto-post-section ${isQueued ? 'queued' : ''}">
           <div class="auto-post-toggle">
-            <label class="switch-label">
+            <label class="auto-post-label ${isQueued ? 'active' : ''}">
               <input type="checkbox" class="auto-post-checkbox" data-draft-id="${draft.id}" ${isQueued ? 'checked' : ''}>
-              <span class="switch-text">📤 Auto-post when rate limit expires</span>
+              <span class="checkbox-custom"></span>
+              <span class="auto-post-text">
+                <span class="auto-post-icon">📤</span>
+                <span class="auto-post-title">Auto-post when rate limit expires</span>
+                ${isQueued ? '<span class="auto-post-status">✓ Queued</span>' : '<span class="auto-post-status">Click to queue</span>'}
+              </span>
             </label>
           </div>
           ${isQueued ? `
-            <div class="queue-status">
-              <span class="queue-badge ${queueItem?.status || 'queued'}">
-                ${queueItem?.status === 'queued' ? '⏳ Queued for auto-posting' : 
-                  queueItem?.status === 'processing' ? '🔄 Publishing...' : 
-                  queueItem?.status === 'failed' ? '❌ Failed: ' + (queueItem.error || 'Unknown error') : 
-                  '✅ Published'}
-              </span>
+            <div class="queue-controls">
+              <button class="btn btn-xs btn-secondary move-up" data-id="${draft.id}" ${queuePosition === 1 ? 'disabled' : ''}>
+                ↑ Move Up
+              </button>
+              <button class="btn btn-xs btn-secondary move-down" data-id="${draft.id}">
+                ↓ Move Down
+              </button>
+              <span class="queue-info">Position: ${queuePosition} of ${queue.filter(q => q.status === 'queued').length}</span>
             </div>
           ` : ''}
         </div>
@@ -1002,6 +1011,33 @@ async function loadDrafts() {
           const id = e.target.dataset.id;
           await window.electronAPI.deleteDraft(id);
           loadDrafts();
+        }
+      });
+    });
+    
+    // Add event listeners for queue reordering
+    document.querySelectorAll('.move-up').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const draftId = e.target.dataset.id;
+        const result = await window.electronAPI.reorderQueue({ draftId, direction: 'up' });
+        if (result.success) {
+          showNotification('✅ Moved up in queue', 'success');
+          loadDrafts();
+        } else {
+          showNotification('❌ Failed to reorder: ' + result.error, 'error');
+        }
+      });
+    });
+    
+    document.querySelectorAll('.move-down').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const draftId = e.target.dataset.id;
+        const result = await window.electronAPI.reorderQueue({ draftId, direction: 'down' });
+        if (result.success) {
+          showNotification('✅ Moved down in queue', 'success');
+          loadDrafts();
+        } else {
+          showNotification('❌ Failed to reorder: ' + result.error, 'error');
         }
       });
     });

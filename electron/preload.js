@@ -149,6 +149,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addToPostQueue: (post) => ipcRenderer.invoke('add-to-post-queue', post),
   removeFromPostQueue: (id) => ipcRenderer.invoke('remove-from-post-queue', id),
   toggleAutoPost: (data) => ipcRenderer.invoke('toggle-auto-post', data),
+  reorderQueue: (data) => ipcRenderer.invoke('reorder-queue', data),
 
   // Logs
   getLogs: () => ipcRenderer.invoke('get-logs'),

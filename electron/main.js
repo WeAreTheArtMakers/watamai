@@ -2205,15 +2205,19 @@ ipcMain.handle('toggle-auto-post', async (event, { draftId, enabled }) => {
   try {
     // Get draft and add/remove from queue
     const drafts = store.getDrafts();
-    const draft = drafts.find(d => d.id === draftId);
+    // Convert draftId to number if it's a string
+    const numericDraftId = typeof draftId === 'string' ? parseInt(draftId) : draftId;
+    const draft = drafts.find(d => d.id == numericDraftId); // Use == for loose comparison
     
     if (!draft) {
+      console.error('[Queue] Draft not found:', draftId, 'Available drafts:', drafts.map(d => d.id));
       return { success: false, error: 'Draft not found' };
     }
     
     if (enabled) {
       // Add to queue
       const queueItem = store.addToPostQueue(draft);
+      console.log('[Queue] Added to queue:', draft.title);
       return { success: true, queued: true, queueItem };
     } else {
       // Remove from queue
@@ -2221,10 +2225,64 @@ ipcMain.handle('toggle-auto-post', async (event, { draftId, enabled }) => {
       const queueItem = queue.find(q => q.title === draft.title && q.body === draft.body);
       if (queueItem) {
         store.removeFromPostQueue(queueItem.id);
+        console.log('[Queue] Removed from queue:', draft.title);
       }
       return { success: true, queued: false };
     }
   } catch (error) {
+    console.error('[Queue] Toggle auto-post error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('reorder-queue', async (event, { draftId, direction }) => {
+  try {
+    const queue = store.getPostQueue().filter(q => q.status === 'queued');
+    const drafts = store.getDrafts();
+    const numericDraftId = typeof draftId === 'string' ? parseInt(draftId) : draftId;
+    const draft = drafts.find(d => d.id == numericDraftId);
+    
+    if (!draft) {
+      return { success: false, error: 'Draft not found' };
+    }
+    
+    // Find the queue item
+    const queueItemIndex = queue.findIndex(q => q.title === draft.title && q.body === draft.body);
+    
+    if (queueItemIndex === -1) {
+      return { success: false, error: 'Item not in queue' };
+    }
+    
+    // Calculate new position
+    let newIndex = queueItemIndex;
+    if (direction === 'up' && queueItemIndex > 0) {
+      newIndex = queueItemIndex - 1;
+    } else if (direction === 'down' && queueItemIndex < queue.length - 1) {
+      newIndex = queueItemIndex + 1;
+    } else {
+      return { success: false, error: 'Cannot move in that direction' };
+    }
+    
+    // Swap items
+    const item = queue[queueItemIndex];
+    queue.splice(queueItemIndex, 1);
+    queue.splice(newIndex, 0, item);
+    
+    // Update timestamps to reflect new order
+    queue.forEach((item, index) => {
+      item.queuedAt = new Date(Date.now() + index).toISOString();
+    });
+    
+    // Save back to store
+    const allQueue = store.getPostQueue();
+    const nonQueuedItems = allQueue.filter(q => q.status !== 'queued');
+    store.data.postQueue = [...queue, ...nonQueuedItems];
+    store.save();
+    
+    console.log('[Queue] Reordered:', draft.title, direction);
+    return { success: true };
+  } catch (error) {
+    console.error('[Queue] Reorder error:', error);
     return { success: false, error: error.message };
   }
 });
