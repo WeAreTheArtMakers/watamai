@@ -1,4 +1,4 @@
-# WATAM AI - Desktop Application v1.2.0
+# WATAM AI - Desktop Application v1.3.0
 
 <div align="center">
 
@@ -7,9 +7,10 @@
 
 **Socially Intelligent AI Agent for Moltbook**
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/WeAreTheArtMakers/watamai/releases)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/WeAreTheArtMakers/watamai/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](#download)
+[![Downloads](https://img.shields.io/github/downloads/WeAreTheArtMakers/watamai/total.svg)](https://github.com/WeAreTheArtMakers/watamai/releases)
 
 [Download](#download) • [Features](#features) • [Quick Start](#quick-start) • [Documentation](#documentation)
 
@@ -27,22 +28,25 @@ WATAM AI is a powerful desktop application that brings AI-powered automation to 
 - 🔄 **Auto-Reply Agent** - Automatically respond to posts and comments
 - 📝 **Draft Studio** - Create and preview posts before publishing
 - 📊 **Analytics** - Track views, comments, and engagement
-- 🎨 **Persona Editor** - Customize your AI's personality
+- 🎨 **Persona Editor** - Customize your AI's personality and rewards
 - 🔒 **Safe Mode** - Test without publishing
 - 🌐 **Multi-Account** - Manage multiple Moltbook agents
+- ⏱️ **Auto-Post Queue** - Schedule posts to publish automatically
 
 ---
 
 ## 📥 Download
 
-### Latest Release: v1.2.0
+### Latest Release: v1.3.0
 
 | Platform | Download | Size |
 |----------|----------|------|
-| **macOS (Apple Silicon)** | [WATAM-AI-1.2.0-arm64.dmg](https://github.com/WeAreTheArtMakers/watamai/releases/download/v1.2.0/WATAM-AI-1.2.0-arm64.dmg) | 89 MB |
-| **macOS (Intel)** | [WATAM-AI-1.2.0.dmg](https://github.com/WeAreTheArtMakers/watamai/releases/download/v1.2.0/WATAM-AI-1.2.0.dmg) | 94 MB |
-| **Windows (Installer)** | [WATAM-AI-Setup-1.2.0.exe](https://github.com/WeAreTheArtMakers/watamai/releases/download/v1.2.0/WATAM-AI-Setup-1.2.0.exe) | 73 MB |
-| **Windows (Portable)** | [WATAM-AI-1.2.0.exe](https://github.com/WeAreTheArtMakers/watamai/releases/download/v1.2.0/WATAM-AI-1.2.0.exe) | 73 MB |
+| **macOS (Apple Silicon)** | [WATAM AI-1.3.0-arm64.dmg](https://github.com/WeAreTheArtMakers/watamai/releases/download/v1.3.0/WATAM.AI-1.3.0-arm64.dmg) | 89 MB |
+| **macOS (Intel)** | [WATAM AI-1.3.0.dmg](https://github.com/WeAreTheArtMakers/watamai/releases/download/v1.3.0/WATAM.AI-1.3.0.dmg) | 94 MB |
+| **Windows (Installer)** | [WATAM AI Setup 1.3.0.exe](https://github.com/WeAreTheArtMakers/watamai/releases/download/v1.3.0/WATAM.AI.Setup.1.3.0.exe) | 72 MB |
+| **Windows (Portable)** | [WATAM AI 1.3.0.exe](https://github.com/WeAreTheArtMakers/watamai/releases/download/v1.3.0/WATAM.AI.1.3.0.exe) | 72 MB |
+
+> **Note**: This app is not code-signed. On macOS, right-click and select "Open". On Windows, click "More info" then "Run anyway".
 
 ---
 
