@@ -423,12 +423,26 @@ class SimpleStore {
 
   deleteAgent() {
     try {
+      // Delete agent file
       if (fs.existsSync(this.agentPath)) {
         fs.unlinkSync(this.agentPath);
         this.audit('agent.deleted', {});
+        console.log('[Store] ✅ Agent file deleted');
       }
+      
+      // Delete config file to reset all settings
+      if (fs.existsSync(this.configPath)) {
+        fs.unlinkSync(this.configPath);
+        console.log('[Store] ✅ Config file deleted');
+      }
+      
+      // Clear in-memory cache
+      this.agent = null;
+      this.config = {};
+      
+      console.log('[Store] ✅ Agent and config completely reset');
     } catch (error) {
-      console.error('Failed to delete agent:', error);
+      console.error('[Store] ❌ Failed to delete agent:', error);
     }
   }
 

@@ -321,12 +321,12 @@ async function fetchSkillDoc() {
 async function resetAgent() {
   console.log('[Settings] Reset Agent button clicked');
   
-  if (!confirm('Are you sure you want to reset the agent? This will delete all agent data including the API key.')) {
+  if (!confirm('⚠️ Are you sure you want to COMPLETELY RESET the agent?\n\nThis will delete:\n- Agent registration and API key\n- All configuration settings\n- AI provider settings\n- Auto-reply settings\n- All drafts and queue\n\nYou will need to register a new agent and reconfigure everything.')) {
     console.log('[Settings] Reset cancelled by user');
     return;
   }
   
-  console.log('[Settings] Proceeding with agent reset...');
+  console.log('[Settings] Proceeding with complete agent reset...');
   
   try {
     const result = await window.electronAPI.moltbookResetAgent();
@@ -335,8 +335,14 @@ async function resetAgent() {
     if (result.success) {
       currentAgent = null;
       showAgentNotRegistered();
-      showSuccess('Agent reset successfully');
+      showSuccess('✅ Agent completely reset! Please restart the application and register a new agent.');
       console.log('[Settings] ✅ Agent reset successful');
+      
+      // Reload the page after 2 seconds to clear all cached data
+      setTimeout(() => {
+        console.log('[Settings] Reloading application...');
+        window.location.reload();
+      }, 2000);
     } else {
       console.error('[Settings] ❌ Reset failed:', result.error);
       showError(result.error || 'Reset failed');
