@@ -190,10 +190,11 @@ async function loadAIConfig() {
       
       const replyKeywordsInput = document.getElementById('replyKeywords');
       if (replyKeywordsInput) {
-        // EMPTY by default - reply to all posts
-        const keywords = (config.replyKeywords && config.replyKeywords.trim()) ? config.replyKeywords : '';
+        // CRITICAL: Use spaces after commas to match HTML defaults
+        // Also check for empty strings and use default
+        const keywords = (config.replyKeywords && config.replyKeywords.trim()) ? config.replyKeywords : 'watam-agent, watam, modX';
         replyKeywordsInput.value = keywords;
-        console.log('[AI] ✅ Reply keywords set to:', keywords || '(empty - reply to all)');
+        console.log('[AI] ✅ Reply keywords set to:', keywords);
         
         // CRITICAL: Force update the input value again after a short delay
         setTimeout(() => {
@@ -1259,7 +1260,6 @@ window.aiConfigModule = {
   initAIConfig,
   updateAgentStatus,
   logActivity,
-  updateModelOptions,
 };
 
 // Auto-initialize if AI config page exists on load
@@ -1272,11 +1272,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Listen for agent status updates from backend
 if (window.electronAPI && window.electronAPI.onAgentStatusUpdate) {
-  window.electronAPI.onAgentStatusUpdate((data) => {
+  window.electronAPI.onAgentStatusUpdate(async (data) => {
     console.log('[AI] Agent status update received:', data);
-    updateAgentStatus();
+    
+    // Force reload config to get latest stats
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Update UI
+    await updateAgentStatus();
+    
     if (data.postTitle) {
       logActivity(`Replied to: ${data.postTitle}`);
     }
   });
 }
+
+
+// Export module functions
+window.aiConfigModule = {
+  initAIConfig,
+  updateModelOptions,
+};

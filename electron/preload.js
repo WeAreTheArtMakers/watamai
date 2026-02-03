@@ -203,4 +203,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Submolts
   getSubmolts: () => ipcRenderer.invoke('get-submolts'),
   createSubmolt: (data) => ipcRenderer.invoke('create-submolt', data),
+
+  // User Management - NEW
+  searchUser: (username) => ipcRenderer.invoke('search-user', username),
+  searchUsers: (query) => ipcRenderer.invoke('search-users', { query }),
+  getUserProfile: (username) => ipcRenderer.invoke('get-user-profile', { username }),
+  followUser: (username) => ipcRenderer.invoke('follow-user', username),
+  unfollowUser: (username) => ipcRenderer.invoke('unfollow-user', username),
+  getFollowers: () => ipcRenderer.invoke('get-followers'),
+  getFollowing: () => ipcRenderer.invoke('get-following'),
+
+  // Messaging (DM) - NEW
+  dmCheck: () => ipcRenderer.invoke('dm-check'),
+  dmGetRequests: () => ipcRenderer.invoke('dm-get-requests'),
+  dmApproveRequest: (conversationId) => ipcRenderer.invoke('dm-approve-request', conversationId),
+  dmRejectRequest: (conversationId, block) => ipcRenderer.invoke('dm-reject-request', conversationId, block),
+  dmGetConversations: () => ipcRenderer.invoke('dm-get-conversations'),
+  dmGetMessages: (conversationId) => ipcRenderer.invoke('dm-get-messages', conversationId),
+  dmSendMessage: (conversationId, message, needsHumanInput) => ipcRenderer.invoke('dm-send-message', conversationId, message, needsHumanInput),
+  dmStartConversation: (toAgent, message) => ipcRenderer.invoke('dm-start-conversation', toAgent, message),
+
+  // Profile Management - NEW
+  uploadAvatar: (imagePath) => ipcRenderer.invoke('upload-avatar', imagePath),
+  removeAvatar: () => ipcRenderer.invoke('remove-avatar'),
+  updateProfile: (description) => ipcRenderer.invoke('update-profile', description),
 });

@@ -54,11 +54,27 @@ const AI_PROVIDERS = {
 
 // Initialize AI config page
 async function initAIConfig() {
+  console.log('[AI] ========================================');
   console.log('[AI] Initializing AI config page...');
-  await loadOllamaModels(); // Load Ollama models first
-  await loadAIConfig();
-  setupAIEventListeners();
-  updateAgentStatus();
+  console.log('[AI] ========================================');
+  
+  try {
+    // Load Ollama models first
+    await loadOllamaModels();
+    
+    // Load AI configuration
+    await loadAIConfig();
+    
+    // Setup event listeners
+    setupAIEventListeners();
+    
+    // Update agent status
+    updateAgentStatus();
+    
+    console.log('[AI] ✅ AI config page initialized successfully');
+  } catch (error) {
+    console.error('[AI] ❌ Failed to initialize AI config:', error);
+  }
 }
 
 // Load Ollama models dynamically
@@ -94,48 +110,61 @@ async function loadAIConfig() {
     });
     
     // AI Provider settings
-    if (config.aiProvider) {
-      const providerSelect = document.getElementById('aiProvider');
-      if (providerSelect) {
-        providerSelect.value = config.aiProvider;
-        
-        // Show/hide API key for Ollama
-        const apiKeyGroup = document.getElementById('aiApiKey').parentElement;
-        if (apiKeyGroup) {
-          if (config.aiProvider === 'ollama') {
-            apiKeyGroup.style.display = 'none';
-          } else {
-            apiKeyGroup.style.display = 'block';
+    const providerSelect = document.getElementById('aiProvider');
+    if (providerSelect && config.aiProvider) {
+      providerSelect.value = config.aiProvider;
+      console.log('[AI] ✅ Provider set to:', config.aiProvider);
+      
+      // Show/hide API key for Ollama
+      const apiKeyGroup = document.getElementById('aiApiKey').parentElement;
+      if (apiKeyGroup) {
+        if (config.aiProvider === 'ollama') {
+          apiKeyGroup.style.display = 'none';
+          console.log('[AI] ✅ Hidden API key field for Ollama');
+        } else {
+          apiKeyGroup.style.display = 'block';
+          console.log('[AI] ✅ Shown API key field for', config.aiProvider);
+        }
+      }
+      
+      // Show/hide custom endpoint
+      const customGroup = document.getElementById('customEndpointGroup');
+      if (customGroup) {
+        customGroup.style.display = config.aiProvider === 'custom' ? 'block' : 'none';
+      }
+      
+      // Update model options and wait for them to load
+      console.log('[AI] Updating model options for:', config.aiProvider);
+      await updateModelOptions(config.aiProvider);
+      console.log('[AI] ✅ Model options updated');
+      
+      // Set the model after options are loaded
+      if (config.aiModel) {
+        setTimeout(() => {
+          const modelSelect = document.getElementById('aiModel');
+          if (modelSelect) {
+            modelSelect.value = config.aiModel;
+            console.log('[AI] ✅ Model set to:', config.aiModel);
           }
-        }
-        
-        // Update model options and wait for them to load
-        await updateModelOptions(config.aiProvider);
-        
-        // Set the model after options are loaded
-        if (config.aiModel) {
-          setTimeout(() => {
-            const modelSelect = document.getElementById('aiModel');
-            if (modelSelect) {
-              modelSelect.value = config.aiModel;
-              console.log('[AI] Model set to:', config.aiModel);
-            }
-          }, 200);
-        }
+        }, 300);
       }
     }
     
-    if (config.aiApiKey) {
+    // API Key (only for non-Ollama providers)
+    if (config.aiApiKey && config.aiProvider !== 'ollama') {
       const apiKeyInput = document.getElementById('aiApiKey');
       if (apiKeyInput) {
         apiKeyInput.value = config.aiApiKey;
+        console.log('[AI] ✅ API key loaded');
       }
     }
     
+    // Custom endpoint
     if (config.customEndpoint) {
       const customEndpointInput = document.getElementById('customEndpoint');
       if (customEndpointInput) {
         customEndpointInput.value = config.customEndpoint;
+        console.log('[AI] ✅ Custom endpoint loaded');
       }
     }
     
@@ -190,13 +219,38 @@ async function loadAIConfig() {
       
       const replyKeywordsInput = document.getElementById('replyKeywords');
       if (replyKeywordsInput) {
-        // EMPTY by default - reply to all posts
-        const keywords = (config.replyKeywords && config.replyKeywords.trim()) ? config.replyKeywords : '';
+        // CRITICAL: Default to empty string for reply to all posts
+        const keywords = config.replyKeywords || '';
         replyKeywordsInput.value = keywords;
-        console.log('[AI] ✅ Reply keywords set to:', keywords || '(empty - reply to all)');
+        console.log('[AI] ✅ Reply keywords set to:', keywords);
         
         // CRITICAL: Force update the input value again after a short delay
         setTimeout(() => {
+          if (replyKeywordsInput.value !== keywords) {
+            console.warn('[AI] ⚠️ Keywords value lost, setting again...');
+            replyKeywordsInput.value = keywords;
+          }
+        }, 200);
+      } else {
+        console.error('[AI] ❌ Reply keywords input not found!');
+      }
+      
+      const maxRepliesInput = document.getElementById('maxRepliesPerHour');
+      if (maxRepliesInput) {
+        const maxReplies = config.maxRepliesPerHour || 10;
+        maxRepliesInput.value = maxReplies;
+        console.log('[AI] ✅ Max replies per hour set to:', maxReplies);
+      } else {
+        console.error('[AI] ❌ Max replies input not found!');
+      }
+      
+      console.log('[AI] ========================================');
+    }, 500); // Increased timeout to ensure DOM is ready
+    
+  } catch (error) {
+    console.error('[AI] Failed to load AI config:', error);
+  }
+}
           if (replyKeywordsInput.value !== keywords) {
             console.warn('[AI] ⚠️ Keywords value lost, setting again...');
             replyKeywordsInput.value = keywords;
@@ -246,77 +300,148 @@ async function loadAIConfig() {
 
 // Setup event listeners
 function setupAIEventListeners() {
+  console.log('[AI] Setting up AI event listeners...');
+  
   // AI Provider change
-  document.getElementById('aiProvider').onchange = async (e) => {
-    const provider = e.target.value;
-    console.log('[AI] Provider changed to:', provider);
-    
-    // Show/hide custom endpoint
-    const customGroup = document.getElementById('customEndpointGroup');
-    if (customGroup) {
-      customGroup.style.display = provider === 'custom' ? 'block' : 'none';
-    }
-    
-    // Show/hide API key field for Ollama
-    const apiKeyGroup = document.getElementById('aiApiKey').parentElement;
-    if (apiKeyGroup) {
-      if (provider === 'ollama') {
-        apiKeyGroup.style.display = 'none';
-      } else {
-        apiKeyGroup.style.display = 'block';
+  const providerSelect = document.getElementById('aiProvider');
+  if (providerSelect) {
+    providerSelect.addEventListener('change', async (e) => {
+      const provider = e.target.value;
+      console.log('[AI] Provider changed to:', provider);
+      
+      // Show/hide custom endpoint
+      const customGroup = document.getElementById('customEndpointGroup');
+      if (customGroup) {
+        customGroup.style.display = provider === 'custom' ? 'block' : 'none';
       }
-    }
-    
-    // Update model options - CRITICAL: Wait for completion
-    if (provider) {
-      console.log('[AI] Updating model options for:', provider);
-      await updateModelOptions(provider);
-      console.log('[AI] Model options update completed');
-    }
-    
-    // Update agent status display after model options are loaded
-    setTimeout(updateAgentStatus, 300);
-  };
+      
+      // Show/hide API key field for Ollama
+      const apiKeyGroup = document.getElementById('aiApiKey').parentElement;
+      if (apiKeyGroup) {
+        if (provider === 'ollama') {
+          apiKeyGroup.style.display = 'none';
+          console.log('[AI] ✅ Hidden API key field for Ollama');
+        } else {
+          apiKeyGroup.style.display = 'block';
+          console.log('[AI] ✅ Shown API key field for', provider);
+        }
+      }
+      
+      // Clear API key for Ollama
+      const apiKeyInput = document.getElementById('aiApiKey');
+      if (provider === 'ollama' && apiKeyInput) {
+        apiKeyInput.value = '';
+        console.log('[AI] ✅ Cleared API key for Ollama');
+      }
+      
+      // Update model options - CRITICAL: Wait for completion
+      if (provider) {
+        console.log('[AI] Updating model options for:', provider);
+        await updateModelOptions(provider);
+        console.log('[AI] ✅ Model options update completed');
+      }
+      
+      // Update agent status display after model options are loaded
+      setTimeout(updateAgentStatus, 300);
+    });
+    console.log('[AI] ✅ Provider change listener added');
+  } else {
+    console.error('[AI] ❌ Provider select not found!');
+  }
   
   // Test AI connection
-  document.getElementById('testAiBtn').onclick = testAIConnection;
+  const testAiBtn = document.getElementById('testAiBtn');
+  if (testAiBtn) {
+    testAiBtn.addEventListener('click', testAIConnection);
+    console.log('[AI] ✅ Test AI button listener added');
+  }
   
   // Save AI config
-  document.getElementById('saveAiConfigBtn').onclick = saveAIConfig;
+  const saveAiConfigBtn = document.getElementById('saveAiConfigBtn');
+  if (saveAiConfigBtn) {
+    saveAiConfigBtn.addEventListener('click', saveAIConfig);
+    console.log('[AI] ✅ Save AI config button listener added');
+  }
   
   // Save auto-reply settings
-  document.getElementById('saveAutoReplyBtn').onclick = saveAutoReplySettings;
+  const saveAutoReplyBtn = document.getElementById('saveAutoReplyBtn');
+  if (saveAutoReplyBtn) {
+    saveAutoReplyBtn.addEventListener('click', saveAutoReplySettings);
+    console.log('[AI] ✅ Save auto-reply button listener added');
+  }
   
   // Save advanced settings
-  document.getElementById('saveAdvancedBtn').onclick = saveAdvancedSettings;
+  const saveAdvancedBtn = document.getElementById('saveAdvancedBtn');
+  if (saveAdvancedBtn) {
+    saveAdvancedBtn.addEventListener('click', saveAdvancedSettings);
+    console.log('[AI] ✅ Save advanced button listener added');
+  }
   
   // Temperature slider
-  document.getElementById('temperature').oninput = (e) => {
-    const value = (e.target.value / 10).toFixed(1);
-    document.getElementById('temperatureValue').textContent = value;
-  };
+  const temperatureSlider = document.getElementById('temperature');
+  if (temperatureSlider) {
+    temperatureSlider.addEventListener('input', (e) => {
+      const value = (e.target.value / 10).toFixed(1);
+      const valueDisplay = document.getElementById('temperatureValue');
+      if (valueDisplay) {
+        valueDisplay.textContent = value;
+      }
+    });
+    console.log('[AI] ✅ Temperature slider listener added');
+  }
   
   // Start/Stop agent
-  document.getElementById('startAgentBtn').onclick = startAgent;
-  document.getElementById('stopAgentBtn').onclick = stopAgent;
+  const startAgentBtn = document.getElementById('startAgentBtn');
+  if (startAgentBtn) {
+    startAgentBtn.addEventListener('click', startAgent);
+    console.log('[AI] ✅ Start agent button listener added');
+  }
   
-  // Test reply
-  document.getElementById('testReplyBtn').onclick = testReply;
+  const stopAgentBtn = document.getElementById('stopAgentBtn');
+  if (stopAgentBtn) {
+    stopAgentBtn.addEventListener('click', stopAgent);
+    console.log('[AI] ✅ Stop agent button listener added');
+  }
   
-  // Test Moltbook connection
-  document.getElementById('testConnectionBtn').onclick = testMoltbookConnection;
+  // Test buttons
+  const testReplyBtn = document.getElementById('testReplyBtn');
+  if (testReplyBtn) {
+    testReplyBtn.addEventListener('click', testReply);
+    console.log('[AI] ✅ Test reply button listener added');
+  }
   
-  // Test agent loop
-  document.getElementById('testAgentLoopBtn').onclick = testAgentLoop;
+  const testConnectionBtn = document.getElementById('testConnectionBtn');
+  if (testConnectionBtn) {
+    testConnectionBtn.addEventListener('click', testMoltbookConnection);
+    console.log('[AI] ✅ Test connection button listener added');
+  }
   
-  // Test heartbeat
-  document.getElementById('testHeartbeatBtn').onclick = testHeartbeat;
+  const testAgentLoopBtn = document.getElementById('testAgentLoopBtn');
+  if (testAgentLoopBtn) {
+    testAgentLoopBtn.addEventListener('click', testAgentLoop);
+    console.log('[AI] ✅ Test agent loop button listener added');
+  }
   
-  // Debug and fix issues
-  document.getElementById('debugAndFixBtn').onclick = debugAndFixIssues;
+  const testHeartbeatBtn = document.getElementById('testHeartbeatBtn');
+  if (testHeartbeatBtn) {
+    testHeartbeatBtn.addEventListener('click', testHeartbeat);
+    console.log('[AI] ✅ Test heartbeat button listener added');
+  }
   
-  // Manual reply to URL
-  document.getElementById('sendManualReplyBtn').onclick = sendManualReply;
+  const debugAndFixBtn = document.getElementById('debugAndFixBtn');
+  if (debugAndFixBtn) {
+    debugAndFixBtn.addEventListener('click', debugAndFixIssues);
+    console.log('[AI] ✅ Debug and fix button listener added');
+  }
+  
+  const sendManualReplyBtn = document.getElementById('sendManualReplyBtn');
+  if (sendManualReplyBtn) {
+    sendManualReplyBtn.addEventListener('click', sendManualReply);
+    console.log('[AI] ✅ Manual reply button listener added');
+  }
+  
+  console.log('[AI] ✅ All AI event listeners set up successfully');
+}
 }
 
 // Update model options based on provider
@@ -356,9 +481,9 @@ async function updateModelOptions(provider) {
       const result = await window.electronAPI.getOllamaModels();
       if (result.success && result.models && result.models.length > 0) {
         AI_PROVIDERS.ollama.models = result.models;
-        console.log('[AI] Updated Ollama models:', result.models);
+        console.log('[AI] ✅ Updated Ollama models:', result.models);
       } else {
-        console.log('[AI] No Ollama models found, using defaults');
+        console.log('[AI] ⚠️ No Ollama models found, using defaults');
         AI_PROVIDERS.ollama.models = ['llama3.2', 'llama3.1', 'mistral', 'phi3', 'gemma2', 'qwen2.5'];
       }
     }
@@ -376,12 +501,18 @@ async function updateModelOptions(provider) {
         '--- No models found. Run: ollama pull llama3.2 ---' : 
         '--- No models available ---';
       modelSelect.appendChild(option);
+      console.log('[AI] ⚠️ No models available for', provider);
     } else {
-      // Add section header for Ollama
+      // Add section header for better UX
       if (provider === 'ollama') {
         const note = document.createElement('option');
         note.disabled = true;
         note.textContent = `--- ${models.length} Installed Models ---`;
+        modelSelect.appendChild(note);
+      } else if (provider === 'groq') {
+        const note = document.createElement('option');
+        note.disabled = true;
+        note.textContent = '--- Fast & Free Models ---';
         modelSelect.appendChild(note);
       }
       
@@ -393,9 +524,17 @@ async function updateModelOptions(provider) {
         modelSelect.appendChild(option);
         console.log('[AI] Added model:', model);
       });
+      
+      console.log('[AI] ✅ Added', models.length, 'models for', provider);
     }
     
-    console.log('[AI] Model options updated successfully, total options:', modelSelect.options.length);
+    console.log('[AI] ✅ Model options updated successfully, total options:', modelSelect.options.length);
+    
+  } catch (error) {
+    console.error('[AI] ❌ Failed to update model options:', error);
+    modelSelect.innerHTML = '<option value="">-- Error loading models --</option>';
+  }
+}
     
     // Trigger change event to update any dependent UI
     modelSelect.dispatchEvent(new Event('change'));
@@ -1259,7 +1398,6 @@ window.aiConfigModule = {
   initAIConfig,
   updateAgentStatus,
   logActivity,
-  updateModelOptions,
 };
 
 // Auto-initialize if AI config page exists on load
@@ -1272,11 +1410,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Listen for agent status updates from backend
 if (window.electronAPI && window.electronAPI.onAgentStatusUpdate) {
-  window.electronAPI.onAgentStatusUpdate((data) => {
+  window.electronAPI.onAgentStatusUpdate(async (data) => {
     console.log('[AI] Agent status update received:', data);
-    updateAgentStatus();
+    
+    // Force reload config to get latest stats
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Update UI
+    await updateAgentStatus();
+    
     if (data.postTitle) {
       logActivity(`Replied to: ${data.postTitle}`);
     }
   });
 }
+
+
+// Export module functions
+window.aiConfigModule = {
+  initAIConfig,
+  updateModelOptions,
+};

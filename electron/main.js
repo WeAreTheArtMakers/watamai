@@ -76,6 +76,16 @@ async function processPostQueue() {
     const postToProcess = queuedPosts[0];
     console.log('[Queue] Processing post:', postToProcess.title);
     
+    // CRITICAL: Skip problematic submolts
+    if (postToProcess.submolt === 'arttech' || postToProcess.submolt === 'm/arttech') {
+      console.log('[Queue] ⚠️ SKIPPING PROBLEMATIC SUBMOLT:', postToProcess.submolt);
+      console.log('[Queue] Removing post with invalid submolt from queue');
+      
+      // Remove from queue
+      store.removeFromPostQueue(postToProcess.id);
+      return;
+    }
+    
     // CRITICAL: Check for duplicate posts
     const existingPosts = store.getPosts();
     const isDuplicate = existingPosts.some(p => 
@@ -2667,8 +2677,14 @@ ipcMain.handle('clean-queue', async () => {
     console.log('[Queue] Current queue size:', queue.length);
     console.log('[Queue] Current drafts:', drafts.length);
     
-    // Remove orphaned items
+    // Remove orphaned items and problematic submolts
     const cleanedQueue = queue.filter(queueItem => {
+      // Remove items with problematic submolts
+      if (queueItem.submolt === 'arttech' || queueItem.submolt === 'm/arttech') {
+        console.log('[Queue] Removing problematic submolt item:', queueItem.title);
+        return false;
+      }
+      
       // Keep non-queued items
       if (queueItem.status !== 'queued') return true;
       
@@ -3419,34 +3435,78 @@ ipcMain.handle('get-agent-status', async () => {
     }
     
     const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
-    const statusResult = await checkMoltbookStatus(apiKey);
     
-    if (statusResult.status === 'active' && statusResult.agent) {
-      console.log('[AgentStatus] ✅ Agent stats fetched:', {
-        karma: statusResult.agent.karma,
-        followers: statusResult.agent.followers,
-        following: statusResult.agent.following
+    // CRITICAL: Use /api/v1/agents/profile?name=AGENT_NAME to get accurate follower/following counts
+    // The /api/v1/agents/me endpoint might not include these fields
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/agents/profile?name=${encodeURIComponent(agent.name)}`,
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+        },
+      };
+      
+      console.log('[AgentStatus] 📡 Fetching profile from:', options.path);
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            console.log('[AgentStatus] 📋 Response status:', res.statusCode);
+            
+            if (res.statusCode === 200) {
+              const result = JSON.parse(data);
+              console.log('[AgentStatus] 📄 Raw response:', JSON.stringify(result, null, 2));
+              
+              // API returns { success: true, agent: {...} }
+              if (result.success && result.agent) {
+                const agentData = result.agent;
+                
+                console.log('[AgentStatus] ✅ Agent stats fetched:', {
+                  karma: agentData.karma,
+                  follower_count: agentData.follower_count,
+                  following_count: agentData.following_count
+                });
+                
+                resolve({
+                  success: true,
+                  statusCode: res.statusCode,
+                  agent: {
+                    name: agentData.name,
+                    karma: agentData.karma || 0,
+                    follower_count: agentData.follower_count || 0,
+                    following_count: agentData.following_count || 0,
+                    status: agentData.is_active ? 'active' : 'inactive'
+                  }
+                });
+              } else {
+                console.error('[AgentStatus] ❌ Invalid response structure');
+                resolve({ success: false, error: 'Invalid response structure', statusCode: res.statusCode });
+              }
+            } else {
+              console.error('[AgentStatus] ❌ HTTP error:', res.statusCode, data);
+              resolve({ success: false, error: `HTTP ${res.statusCode}`, statusCode: res.statusCode });
+            }
+          } catch (error) {
+            console.error('[AgentStatus] ❌ Parse error:', error);
+            resolve({ success: false, error: error.message, statusCode: 500 });
+          }
+        });
       });
       
-      return {
-        success: true,
-        statusCode: statusResult.statusCode || 200,
-        agent: {
-          name: statusResult.agent.name,
-          karma: statusResult.agent.karma || 0,
-          followers: statusResult.agent.followers || 0,
-          following: statusResult.agent.following || 0,
-          status: statusResult.agent.status
-        }
-      };
-    } else {
-      console.warn('[AgentStatus] Agent not active or no data');
-      return { 
-        success: false, 
-        error: statusResult.message || 'Agent not active',
-        statusCode: statusResult.statusCode || 500
-      };
-    }
+      req.on('error', (error) => {
+        console.error('[AgentStatus] ❌ Request error:', error);
+        resolve({ success: false, error: error.message, statusCode: 500 });
+      });
+      
+      req.end();
+    });
   } catch (error) {
     console.error('[AgentStatus] ❌ Failed to fetch agent status:', error);
     return { success: false, error: error.message, statusCode: 500 };
@@ -3582,6 +3642,373 @@ ipcMain.handle('create-submolt', async (event, { name, displayName, description 
     return { success: false, error: error.message };
   }
 });
+
+// ============================================
+// USER MANAGEMENT API HANDLERS
+// ============================================
+
+// Search users
+ipcMain.handle('search-users', async (event, { query }) => {
+  try {
+    console.log('[UserSearch] Searching for:', query);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    const encodedQuery = encodeURIComponent(query);
+    
+    return new Promise((resolve) => {
+      // Try different search endpoints
+      const searchPaths = [
+        `/api/v1/search?q=${encodedQuery}&type=agents&limit=20`,
+        `/api/v1/search?q=${encodedQuery}&type=users&limit=20`,
+        `/api/v1/search?q=${encodedQuery}&limit=20`,
+        `/api/v1/agents/search?q=${encodedQuery}&limit=20`
+      ];
+      
+      let currentPathIndex = 0;
+      
+      const tryNextPath = () => {
+        if (currentPathIndex >= searchPaths.length) {
+          resolve({ success: false, error: 'All search endpoints failed' });
+          return;
+        }
+        
+        const path = searchPaths[currentPathIndex];
+        console.log('[UserSearch] Trying path:', path);
+        
+        const options = {
+          hostname: 'www.moltbook.com',
+          path: path,
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'User-Agent': 'WATAM-AI/1.3.2',
+          },
+        };
+        
+        const req = https.request(options, (res) => {
+          let data = '';
+          res.on('data', (chunk) => { data += chunk; });
+          res.on('end', () => {
+            console.log('[UserSearch] Response status:', res.statusCode, 'for path:', path);
+            
+            if (res.statusCode === 200) {
+              try {
+                const parsed = JSON.parse(data);
+                const results = parsed.results || parsed.agents || parsed.users || [];
+                console.log('[UserSearch] ✅ Found results:', results.length);
+                resolve({ success: true, results: results });
+                return;
+              } catch (e) {
+                console.error('[UserSearch] JSON parse error:', e);
+                currentPathIndex++;
+                tryNextPath();
+                return;
+              }
+            } else if (res.statusCode === 500 || res.statusCode === 404) {
+              console.log('[UserSearch] ⚠️ Path failed, trying next...');
+              currentPathIndex++;
+              tryNextPath();
+              return;
+            } else {
+              resolve({ success: false, error: `HTTP ${res.statusCode}`, statusCode: res.statusCode });
+              return;
+            }
+          });
+        });
+        
+        req.on('error', (e) => {
+          console.error('[UserSearch] Request error:', e);
+          currentPathIndex++;
+          tryNextPath();
+        });
+        
+        req.setTimeout(10000, () => {
+          console.log('[UserSearch] Request timeout');
+          req.destroy();
+          currentPathIndex++;
+          tryNextPath();
+        });
+        
+        req.end();
+      };
+      
+      tryNextPath();
+    });
+  } catch (error) {
+    console.error('[UserSearch] ❌ Failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get user profile
+ipcMain.handle('get-user-profile', async (event, { username }) => {
+  try {
+    console.log('[UserProfile] Getting profile for:', username);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/agents/profile?name=${encodeURIComponent(username)}`,
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          console.log('[UserProfile] Response status:', res.statusCode);
+          
+          if (res.statusCode === 200) {
+            try {
+              const parsed = JSON.parse(data);
+              console.log('[UserProfile] Profile loaded:', parsed.name);
+              resolve({ success: true, profile: parsed });
+            } catch (e) {
+              resolve({ success: false, error: 'Invalid JSON response' });
+            }
+          } else {
+            resolve({ success: false, error: `HTTP ${res.statusCode}` });
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        console.error('[UserProfile] Request error:', e);
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('[UserProfile] ❌ Failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Follow user
+ipcMain.handle('follow-user', async (event, username) => {
+  try {
+    console.log('[Follow] Following user:', username);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/agents/${encodeURIComponent(username)}/follow`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          console.log('[Follow] Response status:', res.statusCode);
+          
+          if (res.statusCode === 200 || res.statusCode === 201) {
+            try {
+              const parsed = JSON.parse(data);
+              console.log('[Follow] ✅ Followed:', username);
+              resolve({ success: true, message: parsed.message || 'Followed successfully' });
+            } catch (e) {
+              resolve({ success: true, message: 'Followed successfully' });
+            }
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: false, error: parsed.error || `HTTP ${res.statusCode}` });
+            } catch (e) {
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        console.error('[Follow] Request error:', e);
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('[Follow] ❌ Failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Unfollow user
+ipcMain.handle('unfollow-user', async (event, username) => {
+  try {
+    console.log('[Unfollow] Unfollowing user:', username);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/agents/${encodeURIComponent(username)}/follow`,
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          console.log('[Unfollow] Response status:', res.statusCode);
+          
+          if (res.statusCode === 200 || res.statusCode === 204) {
+            try {
+              const parsed = JSON.parse(data);
+              console.log('[Unfollow] ✅ Unfollowed:', username);
+              resolve({ success: true, message: parsed.message || 'Unfollowed successfully' });
+            } catch (e) {
+              resolve({ success: true, message: 'Unfollowed successfully' });
+            }
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: false, error: parsed.error || `HTTP ${res.statusCode}` });
+            } catch (e) {
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        console.error('[Unfollow] Request error:', e);
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('[Unfollow] ❌ Failed:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Search user (single user by exact name)
+ipcMain.handle('search-user', async (event, username) => {
+  try {
+    console.log('[UserSearch] Searching for user:', username);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      // CORRECT ENDPOINT: /api/v1/agents/profile?name=USERNAME
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/agents/profile?name=${encodeURIComponent(username)}`,
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              const result = JSON.parse(data);
+              const user = result.agent; // API returns { success: true, agent: {...} }
+              
+              if (!user) {
+                console.log('[UserSearch] User not found:', username);
+                resolve({ success: true, user: null });
+                return;
+              }
+              
+              console.log('[UserSearch] ✅ User found:', user.name);
+              
+              // Check if we're following this user
+              const following = store.get('following', []);
+              const isFollowing = following.includes(username);
+              
+              resolve({ success: true, user, isFollowing });
+            } else if (res.statusCode === 404) {
+              console.log('[UserSearch] User not found:', username);
+              resolve({ success: true, user: null });
+            } else {
+              console.error('[UserSearch] ❌ Failed:', res.statusCode, data);
+              try {
+                const errorData = JSON.parse(data);
+                resolve({ success: false, error: errorData.error || `HTTP ${res.statusCode}` });
+              } catch (e) {
+                resolve({ success: false, error: `HTTP ${res.statusCode}` });
+              }
+            }
+          } catch (error) {
+            console.error('[UserSearch] ❌ Parse error:', error);
+            resolve({ success: false, error: error.message });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        console.error('[UserSearch] ❌ Request error:', error);
+        resolve({ success: false, error: error.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('[UserSearch] ❌ Exception:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================
+// END USER MANAGEMENT API HANDLERS
+// ============================================
 
 ipcMain.handle('reply-to-post', async (event, { postId, body }) => {
   try {
@@ -4990,7 +5417,11 @@ async function checkMentionsInOwnPosts() {
         }
         
         // Skip if this is our own comment
-        if (comment.author && comment.author.toLowerCase() === agentName) {
+        const commentAuthor = typeof comment.author === 'string' 
+          ? comment.author 
+          : (comment.author?.name || comment.author?.username || '');
+        
+        if (commentAuthor && commentAuthor.toLowerCase() === agentName) {
           continue;
         }
         
@@ -6294,6 +6725,823 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
+  }
+});
+
+// Get followers list
+ipcMain.handle('get-followers', async () => {
+  try {
+    console.log('[Followers] Fetching followers list...');
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered', followers: [] };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      // Use profile endpoint which should include followers array
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/agents/profile?name=${encodeURIComponent(agent.name)}`,
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+        },
+      };
+      
+      console.log('[Followers] 📡 Fetching from:', options.path);
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            console.log('[Followers] 📋 Response status:', res.statusCode);
+            
+            if (res.statusCode === 200) {
+              const result = JSON.parse(data);
+              console.log('[Followers] 📄 Raw response keys:', Object.keys(result));
+              
+              // API returns { success: true, agent: {...}, followers: [...] }
+              let followers = [];
+              
+              if (result.followers && Array.isArray(result.followers)) {
+                followers = result.followers;
+              } else if (result.agent && result.agent.followers && Array.isArray(result.agent.followers)) {
+                followers = result.agent.followers;
+              } else if (Array.isArray(result)) {
+                followers = result;
+              }
+              
+              console.log('[Followers] ✅ Loaded', followers.length, 'followers');
+              console.log('[Followers] 📄 Sample data:', followers.slice(0, 2));
+              
+              resolve({ success: true, followers });
+            } else {
+              console.error('[Followers] ❌ Failed:', res.statusCode, data);
+              resolve({ success: false, error: `HTTP ${res.statusCode}`, followers: [] });
+            }
+          } catch (error) {
+            console.error('[Followers] ❌ Parse error:', error);
+            resolve({ success: false, error: error.message, followers: [] });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        console.error('[Followers] ❌ Request error:', error);
+        resolve({ success: false, error: error.message, followers: [] });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('[Followers] ❌ Exception:', error);
+    return { success: false, error: error.message, followers: [] };
+  }
+});
+
+// Get following list
+ipcMain.handle('get-following', async () => {
+  try {
+    console.log('[Following] Fetching following list...');
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered', following: [] };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      // Use profile endpoint which should include following array
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/agents/profile?name=${encodeURIComponent(agent.name)}`,
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+        },
+      };
+      
+      console.log('[Following] 📡 Fetching from:', options.path);
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            console.log('[Following] 📋 Response status:', res.statusCode);
+            
+            if (res.statusCode === 200) {
+              const result = JSON.parse(data);
+              console.log('[Following] 📄 Raw response keys:', Object.keys(result));
+              
+              // API returns { success: true, agent: {...}, following: [...] }
+              let following = [];
+              
+              if (result.following && Array.isArray(result.following)) {
+                following = result.following;
+              } else if (result.agent && result.agent.following && Array.isArray(result.agent.following)) {
+                following = result.agent.following;
+              } else if (Array.isArray(result)) {
+                following = result;
+              }
+              
+              console.log('[Following] ✅ Loaded', following.length, 'following');
+              console.log('[Following] 📄 Sample data:', following.slice(0, 2));
+              
+              resolve({ success: true, following });
+            } else {
+              console.error('[Following] ❌ Failed:', res.statusCode, data);
+              resolve({ success: false, error: `HTTP ${res.statusCode}`, following: [] });
+            }
+          } catch (error) {
+            console.error('[Following] ❌ Parse error:', error);
+            resolve({ success: false, error: error.message, following: [] });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        console.error('[Following] ❌ Request error:', error);
+        resolve({ success: false, error: error.message, following: [] });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('[Following] ❌ Exception:', error);
+    return { success: false, error: error.message, following: [] };
+  }
+});
+
+// ============================================================================
+// MESSAGING (DM) HANDLERS
+// ============================================================================
+
+// Check for DM activity
+ipcMain.handle('dm-check', async () => {
+  try {
+    console.log('[DM] Checking for DM activity...');
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: '/api/v1/agents/dm/check',
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              const result = JSON.parse(data);
+              console.log('[DM] ✅ Activity check:', result.summary || 'No activity');
+              resolve({ success: true, ...result });
+            } else {
+              console.error('[DM] ❌ Failed:', res.statusCode);
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          } catch (error) {
+            console.error('[DM] ❌ Parse error:', error);
+            resolve({ success: false, error: error.message });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        console.error('[DM] ❌ Request error:', error);
+        resolve({ success: false, error: error.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('[DM] ❌ Exception:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get DM requests (pending)
+ipcMain.handle('dm-get-requests', async () => {
+  try {
+    console.log('[DM] Fetching pending requests...');
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered', requests: [] };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: '/api/v1/agents/dm/requests',
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              const result = JSON.parse(data);
+              console.log('[DM] ✅ Loaded', result.requests?.count || 0, 'requests');
+              resolve({ success: true, requests: result.requests?.items || [] });
+            } else {
+              console.error('[DM] ❌ Failed:', res.statusCode);
+              resolve({ success: false, error: `HTTP ${res.statusCode}`, requests: [] });
+            }
+          } catch (error) {
+            console.error('[DM] ❌ Parse error:', error);
+            resolve({ success: false, error: error.message, requests: [] });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        console.error('[DM] ❌ Request error:', error);
+        resolve({ success: false, error: error.message, requests: [] });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('[DM] ❌ Exception:', error);
+    return { success: false, error: error.message, requests: [] };
+  }
+});
+
+// Approve DM request
+ipcMain.handle('dm-approve-request', async (event, conversationId) => {
+  try {
+    console.log('[DM] Approving request:', conversationId);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/agents/dm/requests/${conversationId}/approve`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              console.log('[DM] ✅ Request approved');
+              resolve({ success: true });
+            } else {
+              console.error('[DM] ❌ Failed:', res.statusCode);
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          } catch (error) {
+            resolve({ success: false, error: error.message });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        resolve({ success: false, error: error.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Reject DM request
+ipcMain.handle('dm-reject-request', async (event, conversationId, block = false) => {
+  try {
+    console.log('[DM] Rejecting request:', conversationId, 'block:', block);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const postData = JSON.stringify({ block });
+      
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/agents/dm/requests/${conversationId}/reject`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              console.log('[DM] ✅ Request rejected');
+              resolve({ success: true });
+            } else {
+              console.error('[DM] ❌ Failed:', res.statusCode);
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          } catch (error) {
+            resolve({ success: false, error: error.message });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        resolve({ success: false, error: error.message });
+      });
+      
+      req.write(postData);
+      req.end();
+    });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Get conversations
+ipcMain.handle('dm-get-conversations', async () => {
+  try {
+    console.log('[DM] Fetching conversations...');
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered', conversations: [] };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: '/api/v1/agents/dm/conversations',
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              const result = JSON.parse(data);
+              console.log('[DM] ✅ Loaded', result.conversations?.count || 0, 'conversations');
+              resolve({ 
+                success: true, 
+                conversations: result.conversations?.items || [],
+                total_unread: result.total_unread || 0
+              });
+            } else {
+              console.error('[DM] ❌ Failed:', res.statusCode);
+              resolve({ success: false, error: `HTTP ${res.statusCode}`, conversations: [] });
+            }
+          } catch (error) {
+            console.error('[DM] ❌ Parse error:', error);
+            resolve({ success: false, error: error.message, conversations: [] });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        console.error('[DM] ❌ Request error:', error);
+        resolve({ success: false, error: error.message, conversations: [] });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('[DM] ❌ Exception:', error);
+    return { success: false, error: error.message, conversations: [] };
+  }
+});
+
+// Get conversation messages
+ipcMain.handle('dm-get-messages', async (event, conversationId) => {
+  try {
+    console.log('[DM] Fetching messages for:', conversationId);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered', messages: [] };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/agents/dm/conversations/${conversationId}`,
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              const result = JSON.parse(data);
+              console.log('[DM] ✅ Loaded', result.messages?.length || 0, 'messages');
+              resolve({ 
+                success: true, 
+                messages: result.messages || [],
+                conversation: result.conversation || {}
+              });
+            } else {
+              console.error('[DM] ❌ Failed:', res.statusCode);
+              resolve({ success: false, error: `HTTP ${res.statusCode}`, messages: [] });
+            }
+          } catch (error) {
+            console.error('[DM] ❌ Parse error:', error);
+            resolve({ success: false, error: error.message, messages: [] });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        console.error('[DM] ❌ Request error:', error);
+        resolve({ success: false, error: error.message, messages: [] });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('[DM] ❌ Exception:', error);
+    return { success: false, error: error.message, messages: [] };
+  }
+});
+
+// Send message
+ipcMain.handle('dm-send-message', async (event, conversationId, message, needsHumanInput = false) => {
+  try {
+    console.log('[DM] Sending message to:', conversationId);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const postData = JSON.stringify({ message, needs_human_input: needsHumanInput });
+      
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/agents/dm/conversations/${conversationId}/send`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              console.log('[DM] ✅ Message sent');
+              resolve({ success: true });
+            } else {
+              console.error('[DM] ❌ Failed:', res.statusCode);
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          } catch (error) {
+            resolve({ success: false, error: error.message });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        resolve({ success: false, error: error.message });
+      });
+      
+      req.write(postData);
+      req.end();
+    });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Start new DM conversation
+ipcMain.handle('dm-start-conversation', async (event, toAgent, message) => {
+  try {
+    console.log('[DM] Starting conversation with:', toAgent);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const postData = JSON.stringify({ to: toAgent, message });
+      
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: '/api/v1/agents/dm/request',
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              const result = JSON.parse(data);
+              console.log('[DM] ✅ Conversation request sent');
+              resolve({ success: true, conversation_id: result.conversation_id });
+            } else {
+              console.error('[DM] ❌ Failed:', res.statusCode);
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          } catch (error) {
+            resolve({ success: false, error: error.message });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        resolve({ success: false, error: error.message });
+      });
+      
+      req.write(postData);
+      req.end();
+    });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================================================
+// PROFILE MANAGEMENT HANDLERS
+// ============================================================================
+
+// Upload avatar
+ipcMain.handle('upload-avatar', async (event, imagePath) => {
+  try {
+    console.log('[Profile] Uploading avatar:', imagePath);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const fs = require('fs');
+    const https = require('https');
+    const path = require('path');
+    
+    // Check file exists and size
+    const stats = fs.statSync(imagePath);
+    if (stats.size > 500 * 1024) {
+      return { success: false, error: 'Image too large (max 500 KB)' };
+    }
+    
+    // Read file
+    const fileBuffer = fs.readFileSync(imagePath);
+    const fileName = path.basename(imagePath);
+    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+    
+    // Build multipart form data
+    const formData = Buffer.concat([
+      Buffer.from(`--${boundary}\r\n`),
+      Buffer.from(`Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n`),
+      Buffer.from(`Content-Type: image/${path.extname(imagePath).substring(1)}\r\n\r\n`),
+      fileBuffer,
+      Buffer.from(`\r\n--${boundary}--\r\n`)
+    ]);
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: '/api/v1/agents/me/avatar',
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': formData.length,
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              const result = JSON.parse(data);
+              console.log('[Profile] ✅ Avatar uploaded');
+              resolve({ success: true, avatar_url: result.avatar_url });
+            } else {
+              console.error('[Profile] ❌ Failed:', res.statusCode, data);
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          } catch (error) {
+            resolve({ success: false, error: error.message });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        resolve({ success: false, error: error.message });
+      });
+      
+      req.write(formData);
+      req.end();
+    });
+  } catch (error) {
+    console.error('[Profile] ❌ Exception:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Remove avatar
+ipcMain.handle('remove-avatar', async () => {
+  try {
+    console.log('[Profile] Removing avatar...');
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: '/api/v1/agents/me/avatar',
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              console.log('[Profile] ✅ Avatar removed');
+              resolve({ success: true });
+            } else {
+              console.error('[Profile] ❌ Failed:', res.statusCode);
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          } catch (error) {
+            resolve({ success: false, error: error.message });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        resolve({ success: false, error: error.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Update profile description
+ipcMain.handle('update-profile', async (event, description) => {
+  try {
+    console.log('[Profile] Updating description...');
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const postData = JSON.stringify({ description });
+      
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: '/api/v1/agents/me',
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/1.3.2',
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            if (res.statusCode === 200) {
+              console.log('[Profile] ✅ Profile updated');
+              resolve({ success: true });
+            } else {
+              console.error('[Profile] ❌ Failed:', res.statusCode);
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          } catch (error) {
+            resolve({ success: false, error: error.message });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        resolve({ success: false, error: error.message });
+      });
+      
+      req.write(postData);
+      req.end();
+    });
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 });
 

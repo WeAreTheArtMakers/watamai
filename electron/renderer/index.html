@@ -75,16 +75,6 @@
     <main class="main-content">
       <!-- Dashboard Page -->
       <div id="dashboard" class="page active">
-        <!-- Moltbook Status Banner (hidden by default) -->
-        <div id="moltbookStatusBanner" class="status-banner hidden">
-          <div class="banner-icon">⚠️</div>
-          <div class="banner-content">
-            <div class="banner-title" id="bannerTitle">Moltbook Server Issue</div>
-            <div class="banner-message" id="bannerMessage">Unable to connect to Moltbook. Your agent will retry automatically.</div>
-          </div>
-          <button class="banner-close" onclick="document.getElementById('moltbookStatusBanner').classList.add('hidden')">✕</button>
-        </div>
-
         <header class="page-header">
           <h2>Dashboard</h2>
           <p>Agent status and recent activity</p>
@@ -142,6 +132,52 @@
                 <span class="label">Violations</span>
                 <span class="value">0</span>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- User Search & Follow -->
+        <div class="card">
+          <h3>🔍 Find & Follow Users</h3>
+          <p class="card-description">Search for users and manage your network</p>
+          
+          <div class="user-search-section">
+            <div class="form-group">
+              <div class="search-input-wrapper">
+                <input type="text" id="userSearchInput" placeholder="Search by username..." class="form-control">
+                <button id="searchUserBtn" class="btn btn-primary">Search</button>
+              </div>
+            </div>
+            
+            <div id="userSearchResults" class="user-search-results hidden">
+              <!-- Search results will appear here -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Followers & Following -->
+        <div class="card">
+          <h3>👥 Your Network</h3>
+          <p class="card-description">People who follow you and people you follow</p>
+          
+          <div class="network-tabs">
+            <button class="network-tab active" data-tab="followers" onclick="switchNetworkTab('followers')">
+              Followers (<span id="followersCount">0</span>)
+            </button>
+            <button class="network-tab" data-tab="following" onclick="switchNetworkTab('following')">
+              Following (<span id="followingCount">0</span>)
+            </button>
+          </div>
+          
+          <div id="followersTab" class="network-content active">
+            <div id="followersList" class="users-list">
+              <p class="empty-state">No followers yet</p>
+            </div>
+          </div>
+          
+          <div id="followingTab" class="network-content hidden">
+            <div id="followingList" class="users-list">
+              <p class="empty-state">Not following anyone yet</p>
             </div>
           </div>
         </div>

@@ -277,6 +277,9 @@ async function loadDashboard() {
     console.log('[Dashboard] Fetching agent stats from Moltbook...');
     await loadAgentStats();
     
+    // Load network stats (followers/following)
+    await loadNetworkStats();
+    
     // Load rate limits
     document.getElementById('rateLimits').innerHTML = `
       <div class="stat">
@@ -320,16 +323,6 @@ async function loadAgentStats() {
     
     if (!result.success) {
       console.warn('[Dashboard] Failed to load agent stats:', result.error);
-      console.warn('[Dashboard] Status code:', result.statusCode);
-      
-      // Show Moltbook status banner if it's a server error
-      if (result.statusCode === 500 || result.statusCode === 502 || result.statusCode === 503 || result.statusCode === 401) {
-        console.log('[Dashboard] 🚨 Showing Moltbook status banner for code:', result.statusCode);
-        showMoltbookStatusBanner(result.statusCode, result.error);
-      } else {
-        console.log('[Dashboard] ⚠️ Not showing banner for code:', result.statusCode);
-      }
-      
       // Show default values instead of "Loading..."
       const agentStatsContainer = document.getElementById('agentStats');
       if (agentStatsContainer) {
@@ -351,15 +344,16 @@ async function loadAgentStats() {
       return;
     }
     
-    // Hide banner if stats loaded successfully
-    hideMoltbookStatusBanner();
-    
     console.log('[Dashboard] Agent stats:', result.agent);
     
     // Update agent stats in Dashboard
     const agentStatsContainer = document.getElementById('agentStats');
     if (agentStatsContainer && result.agent) {
       const agent = result.agent;
+      // CRITICAL: Use follower_count and following_count (not followers/following)
+      const followerCount = agent.follower_count || 0;
+      const followingCount = agent.following_count || 0;
+      
       agentStatsContainer.innerHTML = `
         <div class="stat">
           <span class="label">Karma</span>
@@ -367,17 +361,17 @@ async function loadAgentStats() {
         </div>
         <div class="stat">
           <span class="label">Followers</span>
-          <span class="value">${agent.followers || 0}</span>
+          <span class="value">${followerCount}</span>
         </div>
         <div class="stat">
           <span class="label">Following</span>
-          <span class="value">${agent.following || 0}</span>
+          <span class="value">${followingCount}</span>
         </div>
       `;
       console.log('[Dashboard] ✅ Agent stats updated:', {
         karma: agent.karma,
-        followers: agent.followers,
-        following: agent.following
+        followers: followerCount,
+        following: followingCount
       });
       
       // CRITICAL: Also update Persona page karma display
@@ -2587,46 +2581,265 @@ async function loadAgentProfile() {
 
 // Agent profile initialization is now handled in main DOMContentLoaded above
 
-// Moltbook Status Banner Functions
-function showMoltbookStatusBanner(statusCode, errorMessage) {
-  const banner = document.getElementById('moltbookStatusBanner');
-  if (!banner) return;
+
+// ============================================
+// USER SEARCH & NETWORK MANAGEMENT
+// ============================================
+
+// Load network stats (followers/following)
+async function loadNetworkStats() {
+  try {
+    console.log('[Network] Loading network stats...');
+    
+    // Use /api/v1/agents/me to get accurate follower/following counts
+    const result = await window.electronAPI.getAgentStatus();
+    
+    if (result.success && result.agent) {
+      const followersCount = result.agent.follower_count || 0;
+      const followingCount = result.agent.following_count || 0;
+      const agentName = result.agent.name;
+      
+      // Update counts in tabs
+      const followersCountEl = document.getElementById('followersCount');
+      const followingCountEl = document.getElementById('followingCount');
+      
+      if (followersCountEl) followersCountEl.textContent = followersCount;
+      if (followingCountEl) followingCountEl.textContent = followingCount;
+      
+      console.log('[Network] ✅ Network stats loaded:', { followersCount, followingCount });
+      
+      // Show message with link to web profile since API doesn't provide lists
+      const followersTab = document.getElementById('followersTab');
+      const followingTab = document.getElementById('followingTab');
+      
+      if (followersTab) {
+        followersTab.innerHTML = `
+          <div class="network-message">
+            <div class="network-icon">👥</div>
+            <h3>View Your Network on Moltbook</h3>
+            <p>You have <strong>${followersCount} followers</strong></p>
+            <p class="network-hint">The Moltbook API doesn't provide follower lists yet.<br>Visit your profile to see who follows you.</p>
+            <button class="btn btn-primary" onclick="window.electronAPI.openExternal('https://www.moltbook.com/u/${agentName}')">
+              🦞 Open Profile on Moltbook
+            </button>
+          </div>
+        `;
+      }
+      
+      if (followingTab) {
+        followingTab.innerHTML = `
+          <div class="network-message">
+            <div class="network-icon">🔗</div>
+            <h3>View Your Network on Moltbook</h3>
+            <p>You follow <strong>${followingCount} agents</strong></p>
+            <p class="network-hint">The Moltbook API doesn't provide following lists yet.<br>Visit your profile to see who you follow.</p>
+            <button class="btn btn-primary" onclick="window.electronAPI.openExternal('https://www.moltbook.com/u/${agentName}')">
+              🦞 Open Profile on Moltbook
+            </button>
+          </div>
+        `;
+      }
+    }
+  } catch (error) {
+    console.error('[Network] Failed to load network stats:', error);
+  }
+}
+
+// Switch between followers and following tabs
+window.switchNetworkTab = function(tab) {
+  console.log('[Network] Switching to tab:', tab);
   
-  const title = document.getElementById('bannerTitle');
-  const message = document.getElementById('bannerMessage');
+  // Update tab buttons
+  document.querySelectorAll('.network-tab').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  const tabBtn = document.querySelector(`[data-tab="${tab}"]`);
+  if (tabBtn) tabBtn.classList.add('active');
   
-  // Remove all type classes
-  banner.classList.remove('warning', 'error', 'info', 'success');
+  // Update content
+  document.querySelectorAll('.network-content').forEach(content => {
+    content.classList.remove('active');
+    content.classList.add('hidden');
+  });
   
-  if (statusCode === 500 || statusCode === 502 || statusCode === 503) {
-    // Server error - warning (temporary)
-    banner.classList.add('warning');
-    title.textContent = '⚠️ Moltbook Server Issue';
-    message.textContent = 'Moltbook is having temporary server issues. Your agent will retry automatically. This is not your fault.';
-  } else if (statusCode === 401 || statusCode === 403) {
-    // Auth error - BUT this is usually a temporary Moltbook issue too!
-    banner.classList.add('warning');
-    title.textContent = '⚠️ Moltbook Connection Issue';
-    message.textContent = 'Cannot connect to Moltbook right now. This is usually a temporary server issue. Check moltbook.com to see if the site is working. Your agent will retry automatically.';
+  if (tab === 'followers') {
+    const followersTab = document.getElementById('followersTab');
+    if (followersTab) {
+      followersTab.classList.add('active');
+      followersTab.classList.remove('hidden');
+    }
   } else {
-    // Generic error
-    banner.classList.add('warning');
-    title.textContent = '⚠️ Connection Issue';
-    message.textContent = errorMessage || 'Unable to connect to Moltbook. Check your internet connection.';
+    const followingTab = document.getElementById('followingTab');
+    if (followingTab) {
+      followingTab.classList.add('active');
+      followingTab.classList.remove('hidden');
+    }
+  }
+};
+
+// Search for users
+async function searchUsers() {
+  const searchInput = document.getElementById('userSearchInput');
+  const query = searchInput.value.trim();
+  
+  if (!query) {
+    showNotification('Please enter a username to search', 'warning');
+    return;
   }
   
-  banner.classList.remove('hidden');
-  console.log('[Banner] Showing Moltbook status banner:', statusCode);
-}
-
-function hideMoltbookStatusBanner() {
-  const banner = document.getElementById('moltbookStatusBanner');
-  if (banner) {
-    banner.classList.add('hidden');
-    console.log('[Banner] Hiding Moltbook status banner');
+  try {
+    console.log('[Network] Searching for user:', query);
+    showNotification('Searching...', 'info');
+    
+    const result = await window.electronAPI.searchUser(query);
+    const resultsContainer = document.getElementById('userSearchResults');
+    
+    if (!result.success) {
+      resultsContainer.innerHTML = `<p class="empty-state error">Search failed: ${result.error}</p>`;
+      resultsContainer.classList.remove('hidden');
+      showNotification('Search failed: ' + result.error, 'error');
+      return;
+    }
+    
+    if (!result.user) {
+      resultsContainer.innerHTML = '<p class="empty-state">User not found. Make sure the username is correct.</p>';
+      resultsContainer.classList.remove('hidden');
+      showNotification('User not found', 'warning');
+      return;
+    }
+    
+    const user = result.user;
+    const isFollowing = result.isFollowing || false;
+    
+    // API returns follower_count, following_count (not followers, following)
+    const followerCount = user.follower_count || user.followers || 0;
+    const followingCount = user.following_count || user.following || 0;
+    
+    resultsContainer.innerHTML = `
+      <div class="user-card large">
+        <div class="user-avatar large">${user.name.charAt(0).toUpperCase()}</div>
+        <div class="user-info">
+          <div class="user-name large">${user.name}</div>
+          ${user.description ? `<div class="user-description">${user.description}</div>` : ''}
+          <div class="user-stats">
+            <span>⭐ ${user.karma || 0} karma</span>
+            <span>👥 ${followerCount} followers</span>
+            <span>👤 ${followingCount} following</span>
+          </div>
+          ${user.is_claimed ? '<span class="user-badge">✓ Verified</span>' : ''}
+        </div>
+        <div class="user-actions">
+          ${isFollowing ? 
+            `<button class="btn btn-danger" onclick="unfollowUser('${user.name}')">Unfollow</button>` :
+            `<button class="btn btn-primary" onclick="followUser('${user.name}')">Follow</button>`
+          }
+          <button class="btn btn-secondary" onclick="viewUserProfile('${user.name}')">View Profile</button>
+        </div>
+      </div>
+    `;
+    
+    resultsContainer.classList.remove('hidden');
+    showNotification('User found!', 'success');
+    console.log('[Network] ✅ User found:', user.name, 'Karma:', user.karma, 'Followers:', followerCount);
+    
+  } catch (error) {
+    console.error('[Network] Search failed:', error);
+    showNotification('Search failed: ' + error.message, 'error');
   }
 }
 
-// Make functions globally accessible
-window.showMoltbookStatusBanner = showMoltbookStatusBanner;
-window.hideMoltbookStatusBanner = hideMoltbookStatusBanner;
+// Follow a user
+window.followUser = async function(username) {
+  try {
+    console.log('[Network] Following user:', username);
+    showNotification('Following...', 'info');
+    
+    const result = await window.electronAPI.followUser(username);
+    
+    if (result.success) {
+      showNotification(`✅ Now following ${username}!`, 'success');
+      
+      // Update button to "Following"
+      const searchResults = document.getElementById('userSearchResults');
+      if (searchResults) {
+        const followBtn = searchResults.querySelector('.btn-primary');
+        if (followBtn) {
+          followBtn.textContent = 'Following';
+          followBtn.classList.remove('btn-primary');
+          followBtn.classList.add('btn-secondary');
+          followBtn.onclick = () => unfollowUser(username);
+        }
+      }
+      
+      // Refresh network stats and lists
+      await loadNetworkStats();
+    } else {
+      showNotification('Failed to follow: ' + result.error, 'error');
+    }
+  } catch (error) {
+    console.error('[Network] Follow failed:', error);
+    showNotification('Failed to follow: ' + error.message, 'error');
+  }
+};
+
+// Unfollow a user
+window.unfollowUser = async function(username) {
+  if (!confirm(`Unfollow ${username}?`)) {
+    return;
+  }
+  
+  try {
+    console.log('[Network] Unfollowing user:', username);
+    showNotification('Unfollowing...', 'info');
+    
+    const result = await window.electronAPI.unfollowUser(username);
+    
+    if (result.success) {
+      showNotification(`✅ Unfollowed ${username}`, 'success');
+      
+      // Update button to "Follow"
+      const searchResults = document.getElementById('userSearchResults');
+      if (searchResults) {
+        const unfollowBtn = searchResults.querySelector('.btn-secondary, .btn-danger');
+        if (unfollowBtn && unfollowBtn.textContent.includes('Following') || unfollowBtn.textContent.includes('Unfollow')) {
+          unfollowBtn.textContent = 'Follow';
+          unfollowBtn.classList.remove('btn-secondary', 'btn-danger');
+          unfollowBtn.classList.add('btn-primary');
+          unfollowBtn.onclick = () => followUser(username);
+        }
+      }
+      
+      // Refresh network stats and lists
+      await loadNetworkStats();
+    } else {
+      showNotification('Failed to unfollow: ' + result.error, 'error');
+    }
+  } catch (error) {
+    console.error('[Network] Unfollow failed:', error);
+    showNotification('Failed to unfollow: ' + error.message, 'error');
+  }
+};
+
+// View user profile (opens in browser)
+window.viewUserProfile = function(username) {
+  const url = `https://www.moltbook.com/u/${username}`;
+  window.electronAPI.openExternal(url);
+  console.log('[Network] Opening profile:', url);
+};
+
+// Setup search button listener
+document.addEventListener('DOMContentLoaded', () => {
+  const searchBtn = document.getElementById('searchUserBtn');
+  if (searchBtn) {
+    searchBtn.addEventListener('click', searchUsers);
+  }
+  
+  const searchInput = document.getElementById('userSearchInput');
+  if (searchInput) {
+    searchInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        searchUsers();
+      }
+    });
+  }
+});
