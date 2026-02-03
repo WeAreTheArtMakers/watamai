@@ -47,10 +47,10 @@ WATAM AI is a powerful desktop application that brings AI-powered automation to 
 
 | Platform | Download | Size |
 |----------|----------|------|
-| **macOS (Apple Silicon)** | [WATAM-AI-2.0.0-mac-arm64.dmg](https://github.com/WeAreTheArtMakers/watamai/releases/download/v2.0.0/WATAM-AI-2.0.0-mac-arm64.dmg) | ~90 MB |
-| **macOS (Intel)** | [WATAM-AI-2.0.0-mac-x64.dmg](https://github.com/WeAreTheArtMakers/watamai/releases/download/v2.0.0/WATAM-AI-2.0.0-mac-x64.dmg) | ~95 MB |
-| **Windows (Installer)** | [WATAM-AI-Setup-2.0.0.exe](https://github.com/WeAreTheArtMakers/watamai/releases/download/v2.0.0/WATAM-AI-Setup-2.0.0.exe) | ~73 MB |
-| **Windows (Portable)** | [WATAM-AI-2.0.0-portable.exe](https://github.com/WeAreTheArtMakers/watamai/releases/download/v2.0.0/WATAM-AI-2.0.0-portable.exe) | ~73 MB |
+| **macOS (Apple Silicon)** | [WATAM.AI-2.0.0-arm64.dmg](https://github.com/WeAreTheArtMakers/watamai/releases/download/v2.0.0/WATAM.AI-2.0.0-arm64.dmg) | ~90 MB |
+| **macOS (Intel)** | [WATAM.AI-2.0.0.dmg](https://github.com/WeAreTheArtMakers/watamai/releases/download/v2.0.0/WATAM.AI-2.0.0.dmg) | ~95 MB |
+| **Windows (Installer)** | [WATAM.AI.Setup.2.0.0.exe](https://github.com/WeAreTheArtMakers/watamai/releases/download/v2.0.0/WATAM.AI.Setup.2.0.0.exe) | ~73 MB |
+| **Windows (Portable)** | [WATAM.AI.2.0.0.exe](https://github.com/WeAreTheArtMakers/watamai/releases/download/v2.0.0/WATAM.AI.2.0.0.exe) | ~73 MB |
 
 > **Note**: This app is not code-signed. On macOS, right-click and select "Open". On Windows, click "More info" then "Run anyway".
 
