@@ -130,6 +130,21 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeNavigation();
     setupEventListeners();
     loadDashboard();
+    
+    // Setup search button listener (moved from bottom of file)
+    const searchBtn = document.getElementById('searchUserBtn');
+    if (searchBtn) {
+      searchBtn.addEventListener('click', searchUsers);
+    }
+    
+    const searchInput = document.getElementById('userSearchInput');
+    if (searchInput) {
+      searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          searchUsers();
+        }
+      });
+    }
   }, 100);
 });
 
@@ -262,6 +277,17 @@ async function loadPageData(pageName) {
       }, 300);
       break;
   }
+  
+  // CRITICAL: Trigger translation after page content loads
+  setTimeout(() => {
+    if (window.languageManager) {
+      console.log('[App] Triggering UI translation after page load:', pageName);
+      // Save original text for new content
+      window.languageManager.saveAllOriginalText();
+      // Then translate if needed
+      window.languageManager.translateUI();
+    }
+  }, 100);
 }
 
 // Dashboard
@@ -307,6 +333,9 @@ async function loadDashboard() {
     // Load recent activity from logs
     await loadRecentActivity();
     
+    // Update challenges
+    await updateChallenges();
+    
     console.log('[Dashboard] ✅ Dashboard loaded successfully');
     console.log('[Dashboard] ========================================');
   } catch (error) {
@@ -323,28 +352,56 @@ async function loadAgentStats() {
     
     if (!result.success) {
       console.warn('[Dashboard] Failed to load agent stats:', result.error);
-      // Show default values instead of "Loading..."
+      
+      // Show error notification to user
+      const errorMsg = result.error || 'Unknown error';
+      if (errorMsg.includes('Cannot connect') || errorMsg.includes('ECONNREFUSED')) {
+        showNotification('🔌 Cannot connect to Moltbook - Server might be down', 'error');
+      } else if (errorMsg.includes('timeout') || errorMsg.includes('ETIMEDOUT')) {
+        showNotification('⏱️ Moltbook server is very slow - Please try again later', 'warning');
+      } else if (errorMsg.includes('ENOTFOUND')) {
+        showNotification('🌐 Cannot reach Moltbook - Check your internet connection', 'error');
+      } else {
+        showNotification(`⚠️ Moltbook Error: ${errorMsg}`, 'warning');
+      }
+      
+      // Show default values with error indicator
       const agentStatsContainer = document.getElementById('agentStats');
       if (agentStatsContainer) {
         agentStatsContainer.innerHTML = `
           <div class="stat">
             <span class="label">Karma</span>
-            <span class="value">0</span>
+            <span class="value" style="color: #ef4444;">⚠️ 0</span>
           </div>
           <div class="stat">
             <span class="label">Followers</span>
-            <span class="value">0</span>
+            <span class="value" style="color: #ef4444;">⚠️ 0</span>
           </div>
           <div class="stat">
             <span class="label">Following</span>
-            <span class="value">0</span>
+            <span class="value" style="color: #ef4444;">⚠️ 0</span>
           </div>
         `;
       }
+      
+      // Update agent status to show error
+      const agentStatusValue = document.querySelector('#agentStatus .value');
+      if (agentStatusValue) {
+        agentStatusValue.textContent = '⚠️ Connection Error';
+        agentStatusValue.style.color = '#ef4444';
+      }
+      
       return;
     }
     
     console.log('[Dashboard] Agent stats:', result.agent);
+    
+    // Update agent status to show success
+    const agentStatusValue = document.querySelector('#agentStatus .value');
+    if (agentStatusValue) {
+      agentStatusValue.textContent = '✅ Active';
+      agentStatusValue.style.color = '#22c55e';
+    }
     
     // Update agent stats in Dashboard
     const agentStatsContainer = document.getElementById('agentStats');
@@ -395,6 +452,16 @@ async function loadAgentStats() {
     }
   } catch (error) {
     console.error('[Dashboard] Failed to load agent stats:', error);
+    
+    // Show error notification
+    showNotification('❌ Failed to load agent stats - Check console for details', 'error');
+    
+    // Update UI to show error state
+    const agentStatusValue = document.querySelector('#agentStatus .value');
+    if (agentStatusValue) {
+      agentStatusValue.textContent = '❌ Error';
+      agentStatusValue.style.color = '#ef4444';
+    }
   }
 }
 
@@ -713,7 +780,8 @@ function setupEventListeners() {
       const submolt = document.getElementById('submolt').value;
       const topic = document.getElementById('topic').value;
       const body = document.getElementById('draftBody').value;
-      const includeWatam = document.getElementById('includeWatam').checked;
+      const includeWatamCheckbox = document.getElementById('includeWatam');
+      const includeWatam = includeWatamCheckbox ? includeWatamCheckbox.checked : false;
 
       if (!topic || !body) {
         showNotification('Please enter both title and content', 'error');
@@ -761,7 +829,18 @@ function setupEventListeners() {
       const submolt = document.getElementById('submolt').value;
       const topic = document.getElementById('topic').value;
       let body = document.getElementById('draftBody').value;
-      const includeWatam = document.getElementById('includeWatam').checked;
+      const includeWatamCheckbox = document.getElementById('includeWatam');
+      const includeWatam = includeWatamCheckbox ? includeWatamCheckbox.checked : false;
+
+      console.log('[Preview] 🔍 DEBUG - Reading from form:');
+      console.log('[Preview] - submolt dropdown value:', submolt);
+      console.log('[Preview] - topic value:', topic);
+      console.log('[Preview] - body length:', body.length);
+
+      if (!submolt) {
+        showNotification('Please select a submolt', 'error');
+        return;
+      }
 
       if (!topic || !body) {
         showNotification('Please enter both title and content', 'error');
@@ -772,6 +851,8 @@ function setupEventListeners() {
       if (includeWatam) {
         body = body + '\n\n---\n\nLearn more at https://wearetheartmakers.com';
       }
+
+      console.log('[Preview] 📝 Calling showDraftPreview with:', { submolt, title: topic, bodyLength: body.length });
 
       showDraftPreview({
         submolt,
@@ -813,23 +894,46 @@ function setupEventListeners() {
       newPublishBtn.disabled = true;
       newPublishBtn.textContent = 'Publishing...';
       
-      const submolt = document.getElementById('previewSubmolt').textContent;
-      const title = document.getElementById('previewTitle').textContent;
-      const body = document.getElementById('previewBody').textContent;
+      // Get data from preview elements (populated by Preview button)
+      let submolt = document.getElementById('previewSubmolt')?.textContent || '';
+      const title = document.getElementById('previewTitle')?.textContent || '';
+      const body = document.getElementById('previewBody')?.textContent || '';
 
+      // Remove 'm/' prefix if present (Moltbook API doesn't use it)
+      if (submolt.startsWith('m/')) {
+        submolt = submolt.substring(2);
+        console.log('[Publish] 🔧 Removed m/ prefix, submolt is now:', submolt);
+      }
+
+      console.log('[Publish] 🔍 DEBUG - Reading from preview elements:');
+      console.log('[Publish] - previewSubmolt element:', document.getElementById('previewSubmolt'));
+      console.log('[Publish] - previewSubmolt textContent:', document.getElementById('previewSubmolt')?.textContent);
+      console.log('[Publish] - submolt value (after cleanup):', submolt);
+      console.log('[Publish] - title value:', title);
+      console.log('[Publish] - body length:', body.length);
+
+      // Validate data
       if (!submolt || !title || !body) {
-        showNotification('Missing post data', 'error');
+        console.error('[Publish] Missing data:', { submolt, title, body });
+        showNotification('Please click Preview first to see your post before publishing', 'error');
         isPublishing = false;
+        newPublishBtn.disabled = false;
+        newPublishBtn.textContent = 'Publish Post';
         return;
       }
 
       try {
+        console.log('[Publish] Publishing post:', { submolt, title, bodyLength: body.length });
+        console.log('[Publish] 🚀 Sending to main process with submolt:', submolt);
         showNotification('Publishing post...', 'info');
+        
         const result = await window.electronAPI.publishPost({
           submolt,
           title,
           body,
         });
+
+        console.log('[Publish] 📥 Result from main process:', result);
 
         if (result.success) {
           showNotification('Post published successfully!', 'success');
@@ -839,10 +943,15 @@ function setupEventListeners() {
             showRateLimitCountdown(result.rateLimitInfo.nextPostAllowed);
           }
           
+          // Hide preview
           document.getElementById('draftPreview').classList.add('hidden');
+          
           // Clear form
-          document.getElementById('topic').value = '';
-          document.getElementById('draftBody').value = '';
+          const topicInput = document.getElementById('topic');
+          const bodyInput = document.getElementById('draftBody');
+          if (topicInput) topicInput.value = '';
+          if (bodyInput) bodyInput.value = '';
+          
           // Navigate to posts page
           setTimeout(() => {
             window.navigateToPage('posts');
@@ -851,6 +960,7 @@ function setupEventListeners() {
           showNotification(result.error || 'Failed to publish', 'error');
         }
       } catch (error) {
+        console.error('[Publish] Error:', error);
         showNotification('Failed to publish post: ' + error.message, 'error');
       } finally {
         isPublishing = false;
@@ -1200,13 +1310,111 @@ Key Guidelines:
       }
     }
   });
+  
+  // Skills Page - Advanced Configuration Buttons
+  const saveAdvancedConfigBtn = document.getElementById('saveAdvancedConfigBtn');
+  if (saveAdvancedConfigBtn) {
+    saveAdvancedConfigBtn.addEventListener('click', async () => {
+      try {
+        const apiTimeout = parseInt(document.getElementById('apiTimeout')?.value) || 30;
+        const retryAttempts = parseInt(document.getElementById('retryAttempts')?.value) || 3;
+        const logLevel = document.getElementById('logLevel')?.value || 'info';
+        const enableMetrics = document.getElementById('enableMetrics')?.checked || false;
+        
+        const result = await window.electronAPI.saveConfig({
+          apiTimeout,
+          retryAttempts,
+          logLevel,
+          enableMetrics
+        });
+        
+        if (result.success) {
+          showNotification('✅ Configuration saved successfully!', 'success');
+        } else {
+          showNotification('❌ Failed to save configuration', 'error');
+        }
+      } catch (error) {
+        console.error('[Skills] Save config error:', error);
+        showNotification('❌ Error: ' + error.message, 'error');
+      }
+    });
+  }
+  
+  const exportConfigBtn = document.getElementById('exportConfigBtn');
+  if (exportConfigBtn) {
+    exportConfigBtn.addEventListener('click', async () => {
+      try {
+        const config = await window.electronAPI.getConfig();
+        const configJson = JSON.stringify(config, null, 2);
+        
+        // Create download link
+        const blob = new Blob([configJson], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `watam-config-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showNotification('✅ Configuration exported!', 'success');
+      } catch (error) {
+        console.error('[Skills] Export config error:', error);
+        showNotification('❌ Error: ' + error.message, 'error');
+      }
+    });
+  }
+  
+  const importConfigBtn = document.getElementById('importConfigBtn');
+  if (importConfigBtn) {
+    importConfigBtn.addEventListener('click', () => {
+      // Create file input
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      
+      input.onchange = async (e) => {
+        try {
+          const file = e.target.files[0];
+          if (!file) return;
+          
+          const text = await file.text();
+          const config = JSON.parse(text);
+          
+          // Save imported config
+          const result = await window.electronAPI.saveConfig(config);
+          
+          if (result.success) {
+            showNotification('✅ Configuration imported! Please reload the page.', 'success');
+          } else {
+            showNotification('❌ Failed to import configuration', 'error');
+          }
+        } catch (error) {
+          console.error('[Skills] Import config error:', error);
+          showNotification('❌ Error: ' + error.message, 'error');
+        }
+      };
+      
+      input.click();
+    });
+  }
 }
 
 // Helper functions
 function showDraftPreview(draft) {
+  console.log('[showDraftPreview] 🔍 DEBUG - Received draft:', draft);
+  console.log('[showDraftPreview] - submolt:', draft.submolt);
+  console.log('[showDraftPreview] - title:', draft.title);
+  console.log('[showDraftPreview] - body length:', draft.body?.length);
+  
   document.getElementById('previewSubmolt').textContent = draft.submolt;
   document.getElementById('previewTitle').textContent = draft.title;
   document.getElementById('previewBody').textContent = draft.body;
+  
+  console.log('[showDraftPreview] ✅ Preview elements updated');
+  console.log('[showDraftPreview] - previewSubmolt now contains:', document.getElementById('previewSubmolt').textContent);
+  
   document.getElementById('draftPreview').classList.remove('hidden');
 }
 
@@ -1252,9 +1460,18 @@ function showStatus(element, message, type) {
 
 // Drafts Management
 let submoltsCache = null;
+let submoltsLastFetch = 0;
+const SUBMOLTS_CACHE_DURATION = 300000; // 5 minutes cache
 
 async function loadSubmolts() {
   try {
+    // Use cache if available and fresh
+    const now = Date.now();
+    if (submoltsCache && (now - submoltsLastFetch) < SUBMOLTS_CACHE_DURATION) {
+      console.log('[Submolts] Using cached submolts');
+      return;
+    }
+    
     console.log('[Submolts] Loading submolts...');
     const result = await window.electronAPI.getSubmolts();
     
@@ -1290,6 +1507,7 @@ async function loadSubmolts() {
         });
         
         submoltsCache = activeSubmolts;
+        submoltsLastFetch = Date.now(); // Update cache timestamp
         console.log('[Submolts] ✅ Loaded', submoltsCache.length, 'active submolts (5+ subscribers)');
         populateSubmoltDropdown();
       } else {
@@ -1407,6 +1625,12 @@ function populateSubmoltDropdown() {
   
   console.log('[Submolts] ✅ Populated dropdown with', select.options.length, 'options');
   console.log('[Submolts] Categories: 🔥', veryPopular.length, '⭐', popular.length, '📚', growing.length);
+  
+  // Set default selection to first option (usually "general")
+  if (select.options.length > 0) {
+    select.selectedIndex = 0;
+    console.log('[Submolts] ✅ Default submolt selected:', select.value);
+  }
 }
 
 function filterSubmolts(searchTerm) {
@@ -1909,15 +2133,17 @@ window.submitReplyDialog = function() {
   window.closeReplyDialog();
 };
 
-function showReplyDialog(title, callback) {
+function showReplyDialog(title, callback, prefillText = '') {
   document.getElementById('replyDialogTitle').textContent = title;
-  document.getElementById('replyDialogText').value = '';
+  document.getElementById('replyDialogText').value = prefillText;
   document.getElementById('replyDialog').classList.remove('hidden');
   replyDialogCallback = callback;
   
-  // Focus textarea
+  // Focus textarea and move cursor to end
   setTimeout(() => {
-    document.getElementById('replyDialogText').focus();
+    const textarea = document.getElementById('replyDialogText');
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
   }, 100);
 }
 
@@ -1952,7 +2178,8 @@ async function loadPosts() {
           <span class="post-submolt">${post.submolt}</span>
           ${post.fromQueue ? '<span class="post-badge auto">🤖 Auto-posted</span>' : ''}
         </div>
-        <div class="post-body">${post.body.substring(0, 200)}${post.body.length > 200 ? '...' : ''}</div>
+        <div class="post-body" data-full="${post.body.replace(/"/g, '&quot;').replace(/\n/g, '\\n')}">${post.body.substring(0, 200)}${post.body.length > 200 ? '...' : ''}</div>
+        ${post.body.length > 200 ? '<button class="btn btn-sm btn-link expand-post-btn" data-id="' + post.id + '">📖 Devamını Oku</button>' : ''}
         <div class="post-meta">
           <span class="post-date">📅 ${new Date(post.publishedAt).toLocaleString()}</span>
           ${post.url ? `<a href="${post.url}" class="post-link" onclick="window.electronAPI.openExternal('${post.url}'); return false;">🔗 View on Moltbook</a>` : '<span class="post-warning">⚠️ Not on Moltbook</span>'}
@@ -1964,6 +2191,7 @@ async function loadPosts() {
         <div class="post-actions">
           <button class="btn btn-sm btn-secondary view-comments" data-id="${post.id}">View Comments</button>
           <button class="btn btn-sm btn-primary reply-to-post" data-id="${post.id}" data-title="${post.title.replace(/"/g, '&quot;')}">Quick Reply</button>
+          <button class="btn btn-sm btn-accent translate-post-btn" data-id="${post.id}">🌐 Çevir</button>
           <button class="btn btn-sm btn-danger delete-post" data-id="${post.id}">Delete</button>
         </div>
         <div class="post-comments hidden" id="comments-${post.id}">
@@ -2057,6 +2285,46 @@ async function loadPosts() {
           } catch (error) {
             showNotification('❌ Error: ' + error.message, 'error');
           }
+        }
+      });
+    });
+    
+    // Add translate button listeners
+    document.querySelectorAll('.translate-post-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.target.dataset.id;
+        
+        if (window.languageManager) {
+          await window.languageManager.translatePost(id);
+        } else {
+          showNotification('❌ Translation system not available', 'error');
+        }
+      });
+    });
+    
+    // Add expand post listeners
+    document.querySelectorAll('.expand-post-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.target.dataset.id;
+        const postCard = document.querySelector(`[data-id="${id}"]`);
+        const bodyElement = postCard.querySelector('.post-body');
+        const expandBtn = e.target;
+        
+        if (bodyElement.classList.contains('expanded')) {
+          // Collapse
+          const preview = bodyElement.getAttribute('data-preview');
+          bodyElement.textContent = preview;
+          bodyElement.classList.remove('expanded');
+          expandBtn.textContent = '📖 Devamını Oku';
+        } else {
+          // Expand
+          const fullText = bodyElement.getAttribute('data-full').replace(/\\n/g, '\n');
+          if (!bodyElement.hasAttribute('data-preview')) {
+            bodyElement.setAttribute('data-preview', bodyElement.textContent);
+          }
+          bodyElement.textContent = fullText;
+          bodyElement.classList.add('expanded');
+          expandBtn.textContent = '📕 Kapat';
         }
       });
     });
@@ -2170,13 +2438,16 @@ async function loadPostComments(postId) {
       console.log('[App] Rendering comment:', { author, body: body.substring(0, 50), commentId });
       
       return `
-        <div class="comment">
+        <div class="comment" data-comment-id="${commentId}">
           <div class="comment-header">
             <strong>@${author}</strong>
             <span class="comment-date">${new Date(createdAt).toLocaleString()}</span>
           </div>
           <div class="comment-body">${body}</div>
-          <button class="btn btn-sm btn-secondary reply-to-comment" data-id="${commentId}" data-post="${postId}" data-author="${author}">Reply</button>
+          <div class="comment-actions">
+            <button class="btn btn-sm btn-secondary reply-to-comment" data-id="${commentId}" data-post="${postId}" data-author="${author}">💬 Reply</button>
+            <button class="btn btn-sm btn-accent translate-comment-btn" data-comment-id="${commentId}">🌐 Çevir</button>
+          </div>
         </div>
       `;
     }).join('');
@@ -2188,26 +2459,63 @@ async function loadPostComments(postId) {
         const postIdFromBtn = btn.dataset.post;
         const author = btn.dataset.author;
         
-        // Show reply dialog
-        showReplyDialog(`Reply to @${author}`, async (replyText) => {
-          try {
-            showNotification('Posting reply...', 'info');
-            const result = await window.electronAPI.replyToComment({ 
-              postId: postIdFromBtn, 
-              commentId, 
-              body: replyText 
-            });
-            
-            if (result.success) {
-              showNotification('✅ Reply posted successfully!', 'success');
-              await loadPostComments(postIdFromBtn);
-            } else {
-              showNotification('❌ Failed to post reply: ' + result.error, 'error');
+        // Auto-generate AI reply instead of showing dialog
+        try {
+          showNotification('🤖 AI generating reply...', 'info');
+          
+          // Get the comment text to reply to
+          const commentElement = btn.closest('.comment-item');
+          const commentBody = commentElement ? commentElement.querySelector('.comment-body').textContent : '';
+          
+          // Generate AI reply
+          const aiResult = await window.electronAPI.generateReply({
+            post: {
+              title: `Reply to @${author}`,
+              body: commentBody
             }
-          } catch (error) {
-            showNotification('❌ Error: ' + error.message, 'error');
+          });
+          
+          if (!aiResult.success) {
+            showNotification('❌ AI failed to generate reply: ' + aiResult.error, 'error');
+            return;
           }
-        });
+          
+          const aiReply = aiResult.reply;
+          
+          // Add mention if not already present
+          const finalReply = aiReply.startsWith(`@${author}`) ? aiReply : `@${author} ${aiReply}`;
+          
+          showNotification('📤 Posting AI reply...', 'info');
+          
+          const result = await window.electronAPI.replyToComment({ 
+            postId: postIdFromBtn, 
+            commentId, 
+            body: finalReply 
+          });
+          
+          if (result.success) {
+            showNotification('✅ AI reply posted successfully!', 'success');
+            await loadPostComments(postIdFromBtn);
+          } else {
+            showNotification('❌ Failed to post reply: ' + result.error, 'error');
+          }
+        } catch (error) {
+          console.error('[App] ❌ Auto AI reply error:', error);
+          showNotification('❌ Error: ' + error.message, 'error');
+        }
+      });
+    });
+    
+    // Add translate comment listeners
+    document.querySelectorAll('.translate-comment-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const commentId = btn.dataset.commentId;
+        
+        if (window.languageManager) {
+          await window.languageManager.translateComment(commentId);
+        } else {
+          showNotification('❌ Translation system not available', 'error');
+        }
       });
     });
   } catch (error) {
@@ -2574,8 +2882,139 @@ async function loadAgentProfile() {
     
     console.log('[Profile] Profile loaded successfully');
     
+    // Update challenges
+    await updateChallenges();
+    
   } catch (error) {
     console.error('[Profile] Failed to load profile:', error);
+  }
+}
+
+// Update Rate Limit Boost Challenges
+async function updateChallenges() {
+  try {
+    console.log('[Challenges] Updating challenges...');
+    
+    // Get agent stats and posts
+    const agentResult = await window.electronAPI.getAgentStatus();
+    const postsResult = await window.electronAPI.getPosts();
+    const config = await window.electronAPI.getConfig();
+    
+    if (!agentResult.success || !agentResult.agent) {
+      console.warn('[Challenges] No agent data available');
+      return;
+    }
+    
+    const agent = agentResult.agent;
+    const posts = postsResult.success ? postsResult.posts : [];
+    const karma = agent.karma || 0;
+    
+    console.log('[Challenges] Agent data:', { karma, postsCount: posts.length });
+    
+    // Challenge 1: Quality Creator (5 upvotes on posts)
+    const totalUpvotes = posts.reduce((sum, post) => sum + (post.upvotes || 0), 0);
+    const qualityCreatorProgress = Math.min(totalUpvotes, 5);
+    const qualityCreatorPercent = (qualityCreatorProgress / 5) * 100;
+    
+    updateChallengeUI(0, qualityCreatorProgress, 5, qualityCreatorPercent, qualityCreatorProgress >= 5);
+    
+    // Challenge 2: Community Helper (reply to 10 different posts)
+    // Count unique posts replied to from audit logs
+    const logsResult = await window.electronAPI.getLogs();
+    const logs = logsResult.success ? logsResult.logs : [];
+    const repliedPosts = new Set();
+    
+    console.log('[Challenges] Checking', logs.length, 'audit logs for replies...');
+    
+    logs.forEach(log => {
+      // Check for both comment.posted and reply.posted actions
+      if ((log.action === 'comment.posted' || log.action === 'reply.posted') && log.details && log.details.postId) {
+        repliedPosts.add(log.details.postId);
+      }
+    });
+    
+    console.log('[Challenges] Found replies to', repliedPosts.size, 'unique posts');
+    
+    const communityHelperProgress = Math.min(repliedPosts.size, 10);
+    const communityHelperPercent = (communityHelperProgress / 10) * 100;
+    
+    updateChallengeUI(1, communityHelperProgress, 10, communityHelperPercent, communityHelperProgress >= 10);
+    
+    // Challenge 3: First Steps (complete agent setup) - always completed if agent exists
+    updateChallengeUI(2, 1, 1, 100, true);
+    
+    // Challenge 4: Trusted Agent (reach 100 karma)
+    const trustedAgentProgress = Math.min(karma, 100);
+    const trustedAgentPercent = (trustedAgentProgress / 100) * 100;
+    const trustedAgentCompleted = karma >= 100;
+    
+    updateChallengeUI(3, trustedAgentProgress, 100, trustedAgentPercent, trustedAgentCompleted);
+    
+    console.log('[Challenges] ✅ Challenges updated:', {
+      qualityCreator: `${qualityCreatorProgress}/5`,
+      communityHelper: `${communityHelperProgress}/10`,
+      firstSteps: 'completed',
+      trustedAgent: `${trustedAgentProgress}/100`
+    });
+    
+  } catch (error) {
+    console.error('[Challenges] Failed to update challenges:', error);
+  }
+}
+
+// Update challenge UI elements
+function updateChallengeUI(index, current, total, percent, completed) {
+  const challenges = document.querySelectorAll('.challenge-item');
+  if (!challenges[index]) return;
+  
+  const challenge = challenges[index];
+  const progressText = challenge.querySelector('.progress-text');
+  const progressFill = challenge.querySelector('.progress-fill');
+  const progressCircle = challenge.querySelector('.progress-ring-circle');
+  
+  // Update progress text
+  if (progressText) {
+    progressText.textContent = completed ? '✓' : `${current}/${total}`;
+  }
+  
+  // Update progress bar
+  if (progressFill) {
+    progressFill.style.width = `${percent}%`;
+    if (completed) {
+      progressFill.classList.add('completed');
+    } else {
+      progressFill.classList.remove('completed');
+    }
+  }
+  
+  // Update progress circle
+  if (progressCircle) {
+    const circumference = 2 * Math.PI * 26; // r=26
+    const offset = circumference - (percent / 100) * circumference;
+    progressCircle.style.strokeDashoffset = offset;
+    
+    if (completed) {
+      progressCircle.style.stroke = '#22c55e';
+    }
+  }
+  
+  // Update challenge status
+  if (completed) {
+    challenge.classList.remove('active', 'locked');
+    challenge.classList.add('completed');
+    
+    const icon = challenge.querySelector('.challenge-icon');
+    if (icon && !icon.textContent.includes('✅')) {
+      icon.textContent = '✅';
+    }
+    
+    const reward = challenge.querySelector('.challenge-reward');
+    if (reward) {
+      reward.classList.add('completed');
+    }
+  } else {
+    challenge.classList.remove('completed', 'locked');
+    challenge.classList.add('active');
   }
 }
 
@@ -2827,19 +3266,5 @@ window.viewUserProfile = function(username) {
   console.log('[Network] Opening profile:', url);
 };
 
-// Setup search button listener
-document.addEventListener('DOMContentLoaded', () => {
-  const searchBtn = document.getElementById('searchUserBtn');
-  if (searchBtn) {
-    searchBtn.addEventListener('click', searchUsers);
-  }
-  
-  const searchInput = document.getElementById('userSearchInput');
-  if (searchInput) {
-    searchInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        searchUsers();
-      }
-    });
-  }
-});
+// REMOVED: Duplicate DOMContentLoaded listener - merged into main listener above
+// Setup search button listener is now in the main DOMContentLoaded block

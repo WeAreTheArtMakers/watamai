@@ -5,7 +5,15 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 
 // Load environment variables from .env file
-require('dotenv').config();
+const dotenvPath = path.join(__dirname, '..', '.env');
+console.log('[Main] Loading .env from:', dotenvPath);
+require('dotenv').config({ path: dotenvPath });
+
+// Log loaded environment variables (masked)
+console.log('[Main] Environment variables loaded:');
+console.log('[Main] - MOLTBOOK_AGENT_NAME:', process.env.MOLTBOOK_AGENT_NAME || 'NOT SET');
+console.log('[Main] - MOLTBOOK_API_KEY:', process.env.MOLTBOOK_API_KEY ? '***' + process.env.MOLTBOOK_API_KEY.slice(-4) : 'NOT SET');
+console.log('[Main] - MOLTBOOK_VERIFICATION_CODE:', process.env.MOLTBOOK_VERIFICATION_CODE ? '***' + process.env.MOLTBOOK_VERIFICATION_CODE.slice(-4) : 'NOT SET');
 
 // Agent loop state variables (moved to top to avoid initialization errors)
 let agentInterval = null;
@@ -250,7 +258,7 @@ async function publishPostToMoltbook(data) {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(postData),
-        'User-Agent': 'WATAM-AI/1.2.0',
+        'User-Agent': 'WATAM-AI/2.0.0',
       },
     };
 
@@ -838,97 +846,8 @@ function deobfuscateKey(obfuscated) {
 // ========================================
 // MOLTBOOK HEARTBEAT SYSTEM (4 HOURS)
 // ========================================
-
-const FOUR_HOURS = 4 * 60 * 60 * 1000;
-
-function startMoltbookHeartbeat() {
-  if (moltbookHeartbeatInterval) {
-    clearInterval(moltbookHeartbeatInterval);
-  }
-  
-  console.log('[Moltbook] 💓 Starting heartbeat system (every 4 hours)');
-  
-  // Run immediately
-  runMoltbookHeartbeat();
-  
-  // Then every 4 hours
-  moltbookHeartbeatInterval = setInterval(runMoltbookHeartbeat, FOUR_HOURS);
-}
-
-async function runMoltbookHeartbeat() {
-  try {
-    console.log('[Moltbook] ========================================');
-    console.log('[Moltbook] 💓 HEARTBEAT CHECK');
-    console.log('[Moltbook] ========================================');
-    
-    const agent = store.getAgent();
-    if (!agent) {
-      console.log('[Moltbook] No agent registered, skipping heartbeat');
-      return;
-    }
-    
-    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
-    
-    // 1. Check claim status
-    console.log('[Moltbook] 1️⃣ Checking claim status...');
-    const status = await checkMoltbookStatus(apiKey);
-    console.log('[Moltbook] Status:', status.status);
-    
-    if (status.status === 'active' && status.agent) {
-      console.log('[Moltbook] ✅ Agent active:', {
-        name: status.agent.name,
-        karma: status.agent.karma,
-        followers: status.agent.followers,
-        following: status.agent.following
-      });
-    }
-    
-    // 2. Check for mentions
-    console.log('[Moltbook] 2️⃣ Checking for mentions...');
-    try {
-      const feed = await fetchMoltbookFeed(apiKey);
-      if (feed && feed.posts) {
-        const mentions = feed.posts.filter(p => {
-          const text = `${p.title || ''} ${p.body || p.content || ''}`;
-          return text.toLowerCase().includes(`@${agent.name.toLowerCase()}`);
-        });
-        
-        if (mentions.length > 0) {
-          console.log('[Moltbook] 🔔', mentions.length, 'mentions found!');
-          
-          // Notify user
-          if (mainWindow) {
-            mainWindow.webContents.send('mentions-found', {
-              count: mentions.length,
-              posts: mentions.map(p => ({
-                id: p.id,
-                title: p.title,
-                author: p.author?.name || 'unknown'
-              }))
-            });
-          }
-        } else {
-          console.log('[Moltbook] No mentions found');
-        }
-      }
-    } catch (error) {
-      console.error('[Moltbook] ❌ Failed to check mentions:', error.message);
-    }
-    
-    // 3. Update last check time
-    store.set('lastMoltbookHeartbeat', new Date().toISOString());
-    
-    console.log('[Moltbook] ✅ Heartbeat complete');
-    console.log('[Moltbook] ========================================');
-    
-  } catch (error) {
-    console.error('[Moltbook] ❌ Heartbeat error:', error);
-  }
-}
-
-// ========================================
-// END HEARTBEAT SYSTEM
-// ========================================
+// NOTE: Heartbeat functions are defined later in the file (after line 4889)
+// to avoid duplication and use the more advanced implementation
 
 
 // Moltbook API: Register agent with skill.md learning
@@ -953,7 +872,7 @@ async function registerMoltbookAgent(name, description) {
   }
   
   // Use the registration endpoint from skill.md or fallback
-  const registrationEndpoint = skillInfo.apiEndpoints.find(ep => ep.includes('register')) || 
+  const registrationEndpoint = (skillInfo.apiEndpoints && skillInfo.apiEndpoints.find(ep => ep.includes('register'))) || 
                                `${MOLTBOOK_BASE_URL}/api/v1/agents/register`;
   
   console.log('[Moltbook] 📝 Registering agent at:', registrationEndpoint);
@@ -963,8 +882,8 @@ async function registerMoltbookAgent(name, description) {
       name, 
       description,
       // Include skill-learned information
-      capabilities: skillInfo.postingGuidelines.slice(0, 5), // First 5 guidelines
-      preferred_submolts: skillInfo.submolts.slice(0, 3), // First 3 submolts
+      capabilities: (skillInfo.postingGuidelines || []).slice(0, 5), // First 5 guidelines
+      preferred_submolts: (skillInfo.submolts || []).slice(0, 3), // First 3 submolts
     });
 
     const options = {
@@ -972,7 +891,7 @@ async function registerMoltbookAgent(name, description) {
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(postData),
-        'User-Agent': 'WATAM-AI/1.2.0',
+        'User-Agent': 'WATAM-AI/2.0.0',
       },
       // Prevent redirects that strip Authorization header
       maxRedirects: 0,
@@ -1038,7 +957,7 @@ async function generateMoltbookIdentityToken(apiKey) {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
-        'User-Agent': 'WATAM-AI/1.2.0',
+        'User-Agent': 'WATAM-AI/2.0.0',
         'Content-Type': 'application/json'
       },
       maxRedirects: 0,
@@ -1125,7 +1044,7 @@ async function verifyMoltbookIdentityToken(identityToken, appKey) {
         'X-Moltbook-App-Key': appKey,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(postData),
-        'User-Agent': 'WATAM-AI/1.2.0',
+        'User-Agent': 'WATAM-AI/2.0.0',
       },
       maxRedirects: 0,
     };
@@ -1203,9 +1122,21 @@ async function verifyMoltbookIdentityToken(identityToken, appKey) {
 }
 
 // Moltbook API: Check agent status
-async function checkMoltbookStatus(apiKey) {
+async function checkMoltbookStatus(apiKey, agentName = null) {
   const https = require('https');
-  const url = `${MOLTBOOK_BASE_URL}/api/v1/agents/me`;
+  
+  // Try to get agent name from store if not provided
+  if (!agentName) {
+    const agent = store.getAgent();
+    agentName = agent ? agent.name : null;
+  }
+  
+  // CRITICAL: Try /api/v1/agents/profile?name=AGENT_NAME first (more reliable)
+  // If that fails, fallback to /api/v1/agents/me
+  const useProfileEndpoint = agentName !== null;
+  const url = useProfileEndpoint 
+    ? `${MOLTBOOK_BASE_URL}/api/v1/agents/profile?name=${agentName}`
+    : `${MOLTBOOK_BASE_URL}/api/v1/agents/me`;
 
   return new Promise((resolve, reject) => {
     // Set timeout for slow Moltbook server (2 minutes)
@@ -1218,7 +1149,7 @@ async function checkMoltbookStatus(apiKey) {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
-        'User-Agent': 'WATAM-AI/1.2.0',
+        'User-Agent': 'WATAM-AI/2.0.0',
       },
       maxRedirects: 0,
     };
@@ -1226,6 +1157,10 @@ async function checkMoltbookStatus(apiKey) {
     console.log('[Moltbook] 🔍 Checking agent status...');
     console.log('[Moltbook] API Key:', maskApiKey(apiKey));
     console.log('[Moltbook] Request URL:', url);
+    console.log('[Moltbook] 🔍 DEBUG: Using', useProfileEndpoint ? 'profile endpoint' : '/me endpoint');
+    console.log('[Moltbook] 🔍 DEBUG: Agent name:', agentName);
+    console.log('[Moltbook] 🔍 DEBUG: API Key length:', apiKey ? apiKey.length : 0);
+    console.log('[Moltbook] 🔍 DEBUG: API Key starts with:', apiKey ? apiKey.substring(0, 15) : 'null');
 
     const req = https.request(url, options, (res) => {
       clearTimeout(timeout);
@@ -1449,7 +1384,7 @@ async function testApiKeyPermissions(apiKey) {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
-        'User-Agent': 'WATAM-AI/1.2.0',
+        'User-Agent': 'WATAM-AI/2.0.0',
       },
     };
 
@@ -1536,7 +1471,7 @@ async function debugApiKeyIssues(apiKey) {
   // Test 2: Agent Status Check
   console.log('[Debug] 2️⃣ Testing agent status...');
   try {
-    const statusResult = await checkMoltbookStatus(apiKey);
+    const statusResult = await checkMoltbookStatus(apiKey, agent.name);
     results.agentStatus = {
       success: true,
       status: statusResult.status,
@@ -1585,7 +1520,7 @@ async function debugApiKeyIssues(apiKey) {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'User-Agent': 'WATAM-AI/1.2.0',
+          'User-Agent': 'WATAM-AI/2.0.0',
         },
       };
 
@@ -1689,12 +1624,21 @@ function createWindow() {
       enableBlinkFeatures: 'CSSUserSelectText',
       // Disable features that might block text selection
       disableBlinkFeatures: '',
+      // CRITICAL: Disable cache to force reload after fixes
+      cache: false,
     },
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0a0a0a',
   });
 
-  mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  // CRITICAL: Clear cache before loading to prevent loop issues
+  mainWindow.webContents.session.clearCache().then(() => {
+    console.log('[App] Cache cleared successfully');
+    mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  }).catch(err => {
+    console.error('[App] Failed to clear cache:', err);
+    mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  });
 
   // CRITICAL: Enable context menu for copy/paste
   mainWindow.webContents.on('context-menu', (e, params) => {
@@ -2146,7 +2090,9 @@ ipcMain.handle('moltbook-register', async (event, { name, description }) => {
 
 ipcMain.handle('moltbook-get-agent', async () => {
   try {
+    console.log('[Moltbook] 🔍 Getting agent...');
     let agent = store.getAgent();
+    console.log('[Moltbook] Agent from store:', agent ? agent.name : 'null');
     
     // If no agent in store, try to load from .env
     if (!agent && process.env.MOLTBOOK_API_KEY && process.env.MOLTBOOK_AGENT_NAME) {
@@ -2171,12 +2117,18 @@ ipcMain.handle('moltbook-get-agent', async () => {
       // Save to store for future use
       store.saveAgent(agent);
       console.log('[Moltbook] ✅ Agent loaded from .env and saved to store');
+    } else if (!agent) {
+      console.log('[Moltbook] ❌ No agent in store and no .env variables');
+      console.log('[Moltbook] - MOLTBOOK_API_KEY:', process.env.MOLTBOOK_API_KEY ? 'SET' : 'NOT SET');
+      console.log('[Moltbook] - MOLTBOOK_AGENT_NAME:', process.env.MOLTBOOK_AGENT_NAME ? 'SET' : 'NOT SET');
     }
     
     if (!agent) {
+      console.log('[Moltbook] Returning null agent');
       return { success: true, agent: null };
     }
 
+    console.log('[Moltbook] Returning agent:', agent.name);
     // Return safe data (no raw API key)
     return {
       success: true,
@@ -2211,7 +2163,7 @@ ipcMain.handle('moltbook-check-status', async () => {
     store.audit('moltbook.status_check.attempt', {});
 
     const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
-    const result = await checkMoltbookStatus(apiKey);
+    const result = await checkMoltbookStatus(apiKey, agent.name);
 
     // Update agent status
     agent.status = result.status;
@@ -2343,6 +2295,11 @@ ipcMain.handle('publish-post', async (event, data) => {
       content: data.body, // Moltbook API uses 'content', not 'body'
     });
 
+    console.log('[Main] 📤 Publishing post to Moltbook API...');
+    console.log('[Main] 📤 URL:', url);
+    console.log('[Main] 📤 Post data:', postData);
+    console.log('[Main] 📤 Submolt value:', data.submolt);
+
     const result = await new Promise((resolve, reject) => {
       const options = {
         method: 'POST',
@@ -2350,7 +2307,7 @@ ipcMain.handle('publish-post', async (event, data) => {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(postData),
-          'User-Agent': 'WATAM-AI/1.2.0',
+          'User-Agent': 'WATAM-AI/2.0.0',
         },
         maxRedirects: 0,
       };
@@ -2921,7 +2878,7 @@ ipcMain.handle('get-post-comments', async (event, postId) => {
         path: `/api/v1/posts/${postId}`,
         method: 'GET',
         headers: {
-          'User-Agent': 'WATAM-AI/1.2.0',
+          'User-Agent': 'WATAM-AI/2.0.0',
         },
       };
 
@@ -2999,7 +2956,7 @@ ipcMain.handle('get-post-comments', async (event, postId) => {
           path: `/api/v1/posts/${postId}`,
           method: 'GET',
           headers: {
-            'User-Agent': 'WATAM-AI/1.2.0',
+            'User-Agent': 'WATAM-AI/2.0.0',
           },
         };
 
@@ -3133,7 +3090,7 @@ ipcMain.handle('debug-agent-issues', async () => {
         console.log('[Debug] 🔄 Checking agent status in real-time...');
         try {
           const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
-          const statusResult = await checkMoltbookStatus(apiKey);
+          const statusResult = await checkMoltbookStatus(apiKey, agent.name);
           
           if (statusResult.status === 'active') {
             console.log('[Debug] ✅ Agent status updated to active');
@@ -3406,7 +3363,7 @@ ipcMain.handle('test-heartbeat', async () => {
     console.log('[Test] Testing heartbeat with API key:', maskApiKey(apiKey));
     
     // Test heartbeat
-    const heartbeatResult = await checkMoltbookStatus(apiKey);
+    const heartbeatResult = await checkMoltbookStatus(apiKey, agent.name);
     
     // FIXED: checkMoltbookStatus returns {status, agent}, not {success}
     const isSuccess = heartbeatResult.status === 'active';
@@ -3561,6 +3518,16 @@ ipcMain.handle('get-submolts', async () => {
               
               if (submolts && Array.isArray(submolts)) {
                 console.log('[Submolts] ✅ Fetched', submolts.length, 'submolts');
+                
+                // Clean submolt names: remove 'm/' prefix if present
+                submolts = submolts.map(s => {
+                  if (s.name && s.name.startsWith('m/')) {
+                    console.log('[Submolts] 🔧 Cleaning submolt name:', s.name, '→', s.name.substring(2));
+                    return { ...s, name: s.name.substring(2) };
+                  }
+                  return s;
+                });
+                
                 resolve({ success: true, submolts });
               } else {
                 console.error('[Submolts] ❌ Invalid response format');
@@ -4053,7 +4020,7 @@ ipcMain.handle('reply-to-post', async (event, { postId, body }) => {
       const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
       console.log('[Reply] Deobfuscated API key:', maskApiKey(apiKey));
       
-      const statusCheck = await checkMoltbookStatus(apiKey);
+      const statusCheck = await checkMoltbookStatus(apiKey, agent.name);
       console.log('[Reply] Agent status check result:', {
         status: statusCheck.status,
         statusCode: statusCheck.statusCode,
@@ -4148,7 +4115,7 @@ ipcMain.handle('reply-to-post', async (event, { postId, body }) => {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(postData),
-          'User-Agent': 'WATAM-AI/1.2.0',
+          'User-Agent': 'WATAM-AI/2.0.0',
         },
       };
 
@@ -4275,7 +4242,7 @@ ipcMain.handle('reply-to-comment', async (event, { postId, commentId, body }) =>
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(postData),
-          'User-Agent': 'WATAM-AI/1.2.0',
+          'User-Agent': 'WATAM-AI/2.0.0',
         },
       };
 
@@ -4345,7 +4312,7 @@ ipcMain.handle('get-post-details', async (event, postId) => {
         path: `/api/v1/posts/${postId}`,
         method: 'GET',
         headers: {
-          'User-Agent': 'WATAM-AI/1.2.0',
+          'User-Agent': 'WATAM-AI/2.0.0',
         },
       };
 
@@ -4940,39 +4907,131 @@ async function runMoltbookHeartbeat() {
     // Update last heartbeat time
     store.set('moltbookLastHeartbeat', new Date().toISOString());
     
-    // 1. Refresh skill.md knowledge
-    console.log('[Moltbook] 📚 Refreshing skill.md knowledge...');
+    // 1. Check for skill updates (skill.json version check)
+    console.log('[Moltbook] 📚 Checking for skill updates...');
     try {
-      const skillInfo = await fetchAndParseMoltbookSkill();
+      const https = require('https');
+      const skillJsonUrl = 'https://www.moltbook.com/skill.json';
       
-      // Update agent with new skill info
-      agent.skillInfo = skillInfo;
-      agent.skillUpdatedAt = new Date().toISOString();
-      store.saveAgent(agent);
+      const skillJson = await new Promise((resolve, reject) => {
+        https.get(skillJsonUrl, (res) => {
+          let data = '';
+          res.on('data', (chunk) => { data += chunk; });
+          res.on('end', () => {
+            try {
+              resolve(JSON.parse(data));
+            } catch (e) {
+              reject(e);
+            }
+          });
+        }).on('error', reject);
+      });
       
-      console.log('[Moltbook] ✅ Skill knowledge updated');
+      const currentVersion = agent.skillInfo?.version || '0.0.0';
+      const latestVersion = skillJson.version || '0.0.0';
+      
+      console.log('[Moltbook] 📦 Current skill version:', currentVersion);
+      console.log('[Moltbook] 📦 Latest skill version:', latestVersion);
+      
+      if (latestVersion !== currentVersion) {
+        console.log('[Moltbook] 🆕 New skill version available! Updating...');
+        
+        // Fetch updated skill.md
+        const skillInfo = await fetchAndParseMoltbookSkill();
+        agent.skillInfo = skillInfo;
+        agent.skillInfo.version = latestVersion;
+        agent.skillUpdatedAt = new Date().toISOString();
+        store.saveAgent(agent);
+        
+        console.log('[Moltbook] ✅ Skill updated to version', latestVersion);
+      } else {
+        console.log('[Moltbook] ✅ Skill is up to date');
+      }
     } catch (error) {
-      console.warn('[Moltbook] ⚠️ Could not update skill knowledge:', error.message);
+      console.warn('[Moltbook] ⚠️ Could not check skill updates:', error.message);
     }
     
-    // 2. Check agent status
+    // 2. Check DMs (Direct Messages)
+    console.log('[Moltbook] 💬 Checking DMs...');
+    try {
+      const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+      const https = require('https');
+      
+      const dmCheck = await new Promise((resolve, reject) => {
+        const options = {
+          hostname: 'www.moltbook.com',
+          path: '/api/v1/agents/dm/check',
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'User-Agent': 'WATAM-AI/2.0.0',
+          },
+        };
+        
+        https.request(options, (res) => {
+          let data = '';
+          res.on('data', (chunk) => { data += chunk; });
+          res.on('end', () => {
+            try {
+              resolve(JSON.parse(data));
+            } catch (e) {
+              reject(e);
+            }
+          });
+        }).on('error', reject).end();
+      });
+      
+      if (dmCheck.pending_requests > 0) {
+        console.log('[Moltbook] 📬 You have', dmCheck.pending_requests, 'pending DM request(s)!');
+        // Notify user
+        if (mainWindow) {
+          mainWindow.webContents.send('dm-requests-pending', {
+            count: dmCheck.pending_requests
+          });
+        }
+      }
+      
+      if (dmCheck.unread_messages > 0) {
+        console.log('[Moltbook] 💬 You have', dmCheck.unread_messages, 'unread message(s)!');
+        // Notify user
+        if (mainWindow) {
+          mainWindow.webContents.send('dm-messages-unread', {
+            count: dmCheck.unread_messages
+          });
+        }
+      }
+      
+      if (dmCheck.pending_requests === 0 && dmCheck.unread_messages === 0) {
+        console.log('[Moltbook] ✅ No new DMs');
+      }
+    } catch (error) {
+      console.warn('[Moltbook] ⚠️ Could not check DMs:', error.message);
+    }
+    
+    // 3. Check agent status
     console.log('[Moltbook] 🔍 Checking agent status...');
     try {
       const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
-      const statusResult = await checkMoltbookStatus(apiKey);
+      const statusResult = await checkMoltbookStatus(apiKey, agent.name);
       
       if (statusResult.status === 'active') {
         console.log('[Moltbook] ✅ Agent status confirmed active');
+      } else if (statusResult.statusCode === 401 || statusResult.statusCode === 500 || statusResult.statusCode === 502 || statusResult.statusCode === 503) {
+        // Temporary server issues - don't stop heartbeat
+        console.warn('[Moltbook] ⚠️ Temporary server issue (HTTP', statusResult.statusCode, ') - continuing heartbeat');
+        console.warn('[Moltbook] 💡 This is likely a Moltbook server problem, not your API key');
+        // Continue with heartbeat despite error
       } else {
         console.error('[Moltbook] ❌ Agent status changed to:', statusResult.status);
         return; // Don't continue if agent not active
       }
     } catch (error) {
       console.error('[Moltbook] ❌ Status check failed:', error.message);
-      return;
+      console.warn('[Moltbook] ⚠️ Continuing heartbeat despite error (might be temporary)');
+      // Continue with heartbeat despite error
     }
     
-    // 3. Run agent loop (browse, engage, post)
+    // 4. Run agent loop (browse, engage, post)
     console.log('[Moltbook] 🤖 Running agent engagement cycle...');
     await runAgentLoop();
     
@@ -5005,7 +5064,7 @@ async function fetchMoltbookFeed(apiKey) {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
-        'User-Agent': 'WATAM-AI/1.2.0',
+        'User-Agent': 'WATAM-AI/2.0.0',
       },
       maxRedirects: 0,
     };
@@ -5100,11 +5159,11 @@ async function fetchMoltbookFeed(apiKey) {
 async function fetchMoltbookFeedAlternative(apiKey) {
   const https = require('https');
   
-  // Try different possible endpoints
+  // Try different possible endpoints based on skill.md v1.9.0
   const endpoints = [
-    '/api/v1/posts',           // Get recent posts
-    '/api/v1/posts/recent',    // Alternative recent posts
-    '/api/v1/submolts/all/posts', // All submolts posts
+    '/api/v1/posts?sort=new&limit=25',     // Global posts (skill.md confirmed)
+    '/api/v1/posts?sort=hot&limit=25',     // Hot posts (skill.md confirmed)
+    '/api/v1/feed?sort=new&limit=25',      // Personalized feed (retry with params)
   ];
   
   for (const endpoint of endpoints) {
@@ -5118,7 +5177,7 @@ async function fetchMoltbookFeedAlternative(apiKey) {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${apiKey}`,
-            'User-Agent': 'WATAM-AI/1.2.0',
+            'User-Agent': 'WATAM-AI/2.0.0',
           },
           maxRedirects: 0,
         };
@@ -5148,8 +5207,10 @@ async function fetchMoltbookFeedAlternative(apiKey) {
                   resolve({ posts: parsed });
                 } else if (parsed.posts) {
                   resolve(parsed);
-                } else if (parsed.data) {
+                } else if (parsed.data && Array.isArray(parsed.data)) {
                   resolve({ posts: parsed.data });
+                } else if (parsed.data && parsed.data.posts) {
+                  resolve({ posts: parsed.data.posts });
                 } else {
                   resolve({ posts: [parsed] });
                 }
@@ -5206,7 +5267,7 @@ async function postMoltbookReply(apiKey, postId, replyText) {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(postData),
-        'User-Agent': 'WATAM-AI/1.2.0',
+        'User-Agent': 'WATAM-AI/2.0.0',
       },
     };
 
@@ -5590,7 +5651,7 @@ async function runAgentLoop() {
     console.log('[AI] 🔄 Checking agent status in real-time...');
     try {
       const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
-      const statusResult = await checkMoltbookStatus(apiKey);
+      const statusResult = await checkMoltbookStatus(apiKey, agent.name);
       
       console.log('[AI] 📊 Status check result:', {
         status: statusResult.status,
@@ -6058,6 +6119,62 @@ async function generateAIReply(config, post) {
     return { success: false, error: error.message };
   }
 }
+
+// Translation service using AI provider
+async function translateText(text, targetLanguage) {
+  try {
+    const config = {
+      aiProvider: store.get('aiProvider'),
+      aiApiKey: store.get('aiApiKey'),
+      aiModel: store.get('aiModel'),
+      temperature: 0.3, // Lower temperature for more accurate translations
+    };
+
+    if (!config.aiProvider) {
+      throw new Error('No AI provider configured');
+    }
+
+    if (config.aiProvider !== 'ollama' && !config.aiApiKey) {
+      throw new Error('No AI API key configured');
+    }
+
+    const languageNames = {
+      'en': 'English',
+      'tr': 'Turkish'
+    };
+
+    const prompt = `Translate the following text to ${languageNames[targetLanguage] || targetLanguage}. Only return the translation, nothing else:\n\n${text}`;
+
+    let translation = '';
+
+    if (config.aiProvider === 'ollama') {
+      translation = await generateOllama(config.aiModel, prompt, config.temperature);
+    } else if (config.aiProvider === 'groq') {
+      translation = await generateGroq(config.aiApiKey, config.aiModel, prompt, config.temperature);
+    } else if (config.aiProvider === 'together') {
+      translation = await generateTogether(config.aiApiKey, config.aiModel, prompt, config.temperature);
+    } else if (config.aiProvider === 'huggingface') {
+      translation = await generateHuggingFace(config.aiApiKey, config.aiModel, prompt, config.temperature);
+    } else if (config.aiProvider === 'openai') {
+      translation = await generateOpenAI(config.aiApiKey, config.aiModel, prompt, config.temperature);
+    } else if (config.aiProvider === 'anthropic') {
+      translation = await generateAnthropic(config.aiApiKey, config.aiModel, prompt, config.temperature);
+    } else if (config.aiProvider === 'google') {
+      translation = await generateGoogle(config.aiApiKey, config.aiModel, prompt, config.temperature);
+    } else {
+      throw new Error('Unsupported AI provider: ' + config.aiProvider);
+    }
+
+    return { success: true, translation: translation.trim() };
+  } catch (error) {
+    console.error('[Translation] Error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+ipcMain.handle('translate-text', async (event, { text, targetLanguage }) => {
+  return await translateText(text, targetLanguage);
+});
 
 ipcMain.handle('start-agent', async () => {
   try {

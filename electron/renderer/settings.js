@@ -6,10 +6,36 @@ let identityStatus = null;
 // Initialize settings page
 async function initSettings() {
   console.log('[Settings] Initializing settings page...');
-  await loadAgent();
-  await loadConfig();
-  await loadIdentityStatus(); // NEW: Load identity status
-  setupEventListeners();
+  
+  try {
+    await loadAgent();
+    console.log('[Settings] ✓ Agent loaded');
+  } catch (error) {
+    console.error('[Settings] ✗ Failed to load agent:', error);
+  }
+  
+  try {
+    await loadConfig();
+    console.log('[Settings] ✓ Config loaded');
+  } catch (error) {
+    console.error('[Settings] ✗ Failed to load config:', error);
+  }
+  
+  try {
+    await loadIdentityStatus();
+    console.log('[Settings] ✓ Identity status loaded');
+  } catch (error) {
+    console.error('[Settings] ✗ Failed to load identity status:', error);
+  }
+  
+  console.log('[Settings] 🔧 About to call setupEventListeners()...');
+  try {
+    setupSettingsEventListeners();
+    console.log('[Settings] ✓ Event listeners setup complete');
+  } catch (error) {
+    console.error('[Settings] ✗ Failed to setup event listeners:', error);
+  }
+  
   console.log('[Settings] Settings page initialized successfully');
 }
 
@@ -54,16 +80,31 @@ async function loadConfig() {
 }
 
 // Setup event listeners
-function setupEventListeners() {
+function setupSettingsEventListeners() {
   console.log('[Settings] Setting up event listeners...');
   
   // Register agent
   const registerBtn = document.getElementById('registerAgentBtn');
   if (registerBtn) {
-    registerBtn.onclick = registerAgent;
+    registerBtn.onclick = () => {
+      console.log('[Settings] 🟢 registerAgentBtn clicked - event triggered');
+      registerAgent();
+    };
     console.log('[Settings] ✓ registerAgentBtn attached');
   } else {
-    console.error('[Settings] ✗ registerAgentBtn not found');
+    console.error('[Settings] ✗ registerAgentBtn not found in DOM');
+  }
+  
+  // Load from .env button
+  const loadFromEnvBtn = document.getElementById('loadFromEnvBtn');
+  if (loadFromEnvBtn) {
+    loadFromEnvBtn.onclick = () => {
+      console.log('[Settings] 🟢 loadFromEnvBtn clicked - event triggered');
+      loadAgentFromEnv();
+    };
+    console.log('[Settings] ✓ loadFromEnvBtn attached');
+  } else {
+    console.error('[Settings] ✗ loadFromEnvBtn not found');
   }
   
   // Check status
@@ -191,35 +232,96 @@ function setupEventListeners() {
 
 // Register agent
 async function registerAgent() {
+  console.log('[Settings] 🟢 registerAgent() called');
+  
   const name = document.getElementById('agentName').value.trim();
   const description = document.getElementById('agentDescription').value.trim();
   
+  console.log('[Settings] Agent name:', name);
+  console.log('[Settings] Agent description:', description);
+  
   if (!name) {
+    console.log('[Settings] ❌ Agent name is empty');
     showError('Agent name is required');
     return;
   }
   
   const btn = document.getElementById('registerAgentBtn');
+  if (!btn) {
+    console.error('[Settings] ❌ registerAgentBtn not found in DOM');
+    showError('Button not found - please refresh the page');
+    return;
+  }
+  
   btn.disabled = true;
   btn.textContent = 'Registering...';
+  console.log('[Settings] 📡 Calling moltbookRegister API...');
   
   try {
     const result = await window.electronAPI.moltbookRegister({ name, description });
+    console.log('[Settings] API result:', result);
     
     if (result.success) {
+      console.log('[Settings] ✅ Registration successful');
       currentAgent = result.agent;
       showAgentRegistered();
       updateAgentDisplay();
       showClaimSection();
       showSuccess('Agent registered successfully! Complete the claim process to activate.');
     } else {
+      console.error('[Settings] ❌ Registration failed:', result.error);
       showError(result.error || 'Registration failed');
     }
   } catch (error) {
+    console.error('[Settings] ❌ Registration exception:', error);
     showError('Registration failed: ' + error.message);
   } finally {
     btn.disabled = false;
     btn.textContent = 'Register Agent';
+    console.log('[Settings] registerAgent() completed');
+  }
+}
+
+// Load agent from .env file
+async function loadAgentFromEnv() {
+  const btn = document.getElementById('loadFromEnvBtn');
+  btn.disabled = true;
+  btn.textContent = 'Loading...';
+  
+  try {
+    console.log('[Settings] Loading agent from .env...');
+    console.log('[Settings] Calling window.electronAPI.moltbookGetAgent()...');
+    
+    // Force reload agent from .env
+    const result = await window.electronAPI.moltbookGetAgent();
+    console.log('[Settings] API result:', result);
+    
+    if (result.success && result.agent) {
+      currentAgent = result.agent;
+      console.log('[Settings] ✅ Agent loaded from .env:', currentAgent.name);
+      
+      showAgentRegistered();
+      updateAgentDisplay();
+      
+      // Check status immediately
+      console.log('[Settings] Checking agent status...');
+      await checkStatus();
+      
+      showSuccess('✅ Agent loaded from .env file successfully!');
+    } else if (result.success && !result.agent) {
+      console.log('[Settings] ❌ No agent in result');
+      showError('❌ No agent found in .env file. Please check your .env configuration.');
+    } else {
+      console.log('[Settings] ❌ API call failed:', result.error);
+      showError('❌ Failed to load agent: ' + (result.error || 'Unknown error'));
+    }
+  } catch (error) {
+    console.error('[Settings] ❌ Exception:', error);
+    showError('Failed to load agent: ' + error.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Load from .env';
+    console.log('[Settings] loadAgentFromEnv() completed');
   }
 }
 
@@ -757,10 +859,11 @@ function copyIdentityToken() {
 window.settingsModule = {
   initSettings,
   loadAgent,
-  setupEventListeners,
+  setupSettingsEventListeners,
   checkStatus,
   fetchSkillDoc,
   registerAgent,
+  loadAgentFromEnv,  // NEW: Load agent from .env
   resetAgent,
   checkForUpdates,
   // NEW Identity functions
@@ -770,12 +873,6 @@ window.settingsModule = {
   copyIdentityToken,
 };
 
-// Auto-initialize if settings page exists on load
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('[Settings] DOMContentLoaded fired');
-  if (document.getElementById('settings')) {
-    console.log('[Settings] Settings page found on DOMContentLoaded, initializing...');
-    initSettings();
-  }
-  console.log('[Settings] settingsModule exported:', Object.keys(window.settingsModule));
-});
+// REMOVED: DOMContentLoaded listener - app.js handles initialization via loadSettings()
+// This was causing duplicate initializations
+

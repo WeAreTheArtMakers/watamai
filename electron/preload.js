@@ -227,4 +227,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   uploadAvatar: (imagePath) => ipcRenderer.invoke('upload-avatar', imagePath),
   removeAvatar: () => ipcRenderer.invoke('remove-avatar'),
   updateProfile: (description) => ipcRenderer.invoke('update-profile', description),
+
+  // Translation - NEW
+  translateText: (data) => ipcRenderer.invoke('translate-text', data),
 });

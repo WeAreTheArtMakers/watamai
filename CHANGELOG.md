@@ -5,6 +5,82 @@ All notable changes to WATAM AI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-02-03
+
+### Added
+- **Enhanced Dashboard with Network Management**
+  - Real-time agent stats display (karma, followers, following)
+  - Network section with follower/following counts
+  - User search functionality to find other agents
+  - Follow/Unfollow buttons for network management
+  - Direct link to Moltbook profile when API limitations exist
+  - User-friendly messages for better UX
+- **Messaging System (Backend Complete) 💬**
+  - Complete backend implementation for Moltbook's private messaging
+  - Check for DM activity (pending requests + unread messages)
+  - View and approve/reject DM requests
+  - List active conversations
+  - Send and receive messages
+  - Escalate to human when needed
+  - Start new conversations with other agents
+  - 8 new IPC handlers: `dm-check`, `dm-get-requests`, `dm-approve-request`, `dm-reject-request`, `dm-get-conversations`, `dm-get-messages`, `dm-send-message`, `dm-start-conversation`
+- **Profile Management (Backend Complete) 👤**
+  - Upload avatar image (max 500 KB, JPEG/PNG/GIF/WebP)
+  - Remove avatar
+  - Update profile description
+  - All changes sync to Moltbook instantly
+  - 3 new IPC handlers: `upload-avatar`, `remove-avatar`, `update-profile`
+- **Documentation**
+  - `DASHBOARD_NETWORK_FIX_COMPLETE.md` - Network implementation details
+  - `FOLLOWERS_FOLLOWING_FIX.md` - API endpoint fixes
+  - `DASHBOARD_FIX_SUMMARY.md` - Complete fix summary
+  - `DASHBOARD_COMPLETE_REDESIGN.md` - Feature roadmap
+  - Updated `MOLTBOOK_API_REFERENCE.md` with complete API reference
+  - Integrated Moltbook skill files (skill.md, messaging.md, heartbeat.md)
+
+### Fixed
+- **Network Display Issues**
+  - Fixed followers/following counts showing 0 (now displays correct values)
+  - Fixed API endpoint from `/api/v1/agents/me` to `/api/v1/agents/profile?name=USERNAME`
+  - Removed empty "No followers yet" messages when counts exist
+  - Added user-friendly message when API doesn't provide user lists
+- **Reply Keywords Configuration**
+  - Removed default keywords (watam-agent, watam, modX) from Reply Keywords field
+  - Now empty by default so agent can auto-reply to all posts
+  - Fixed in both `index.html` and `ai-config.js`
+- **Auto-Reply Settings**
+  - Fixed auto-reply settings persistence
+  - Fixed checkbox states syncing between Settings and AI Config pages
+  - Improved default values for submolts and intervals
+- **Code Quality**
+  - Removed duplicate functions (no function duplication)
+  - Cleaned up unused `loadFollowers` and `loadFollowing` functions
+  - Removed dead code for better maintainability
+
+### Changed
+- **API Integration**
+  - Using correct endpoint `/api/v1/agents/profile?name=USERNAME` for accurate data
+  - Better error handling with detailed logging
+  - Proper handling of `follower_count` and `following_count` field names
+  - Multiple fallback checks for different API response structures
+- **Dashboard UI**
+  - Modern, clean design with better visual hierarchy
+  - Beautiful user profile cards with avatars and karma
+  - Network section with tabs for followers/following
+  - Seamless integration with Moltbook web interface
+- **Code Structure**
+  - Professional, well-organized codebase
+  - Comprehensive logging for debugging
+  - Better separation of concerns
+  - Enhanced error messages
+
+### Technical
+- `electron/main.js`: Added 11 new IPC handlers (8 messaging + 3 profile)
+- `electron/preload.js`: Exposed new messaging and profile methods
+- `electron/renderer/app.js`: Updated network stats loading, removed dead code
+- `electron/renderer/styles.css`: Added `.network-message` styles
+- `electron/package.json`: Version bump to 2.0.0
+
 ## [1.3.2] - 2026-02-02
 
 ### Added

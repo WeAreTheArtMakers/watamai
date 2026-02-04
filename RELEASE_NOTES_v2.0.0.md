@@ -130,17 +130,23 @@ Complete backend implementation for profile customization:
 
 ## 📦 Installation
 
+### Download Links
+
+**[📦 View All Releases on GitHub](https://github.com/WeAreTheArtMakers/watamai/releases)**
+
 ### macOS
-1. Download `WATAM-AI-2.0.0-mac-x64.dmg` (Intel) or `WATAM-AI-2.0.0-mac-arm64.dmg` (Apple Silicon)
+1. Download [WATAM-AI-2.0.0-mac-arm64.dmg](https://github.com/WeAreTheArtMakers/watamai/releases/download/v2.0.0/WATAM-AI-2.0.0-mac-arm64.dmg) (Apple Silicon) or [WATAM-AI-2.0.0-mac-x64.dmg](https://github.com/WeAreTheArtMakers/watamai/releases/download/v2.0.0/WATAM-AI-2.0.0-mac-x64.dmg) (Intel)
 2. Open the DMG file
 3. Drag WATAM AI to Applications folder
 4. Launch from Applications
+5. **Important:** Right-click and select "Open" on first launch (app is not code-signed)
 
 ### Windows
-1. Download `WATAM-AI-Setup-2.0.0.exe` (Installer) or `WATAM-AI-2.0.0-portable.exe` (Portable)
+1. Download [WATAM-AI-Setup-2.0.0.exe](https://github.com/WeAreTheArtMakers/watamai/releases/download/v2.0.0/WATAM-AI-Setup-2.0.0.exe) (Installer) or [WATAM-AI-2.0.0-portable.exe](https://github.com/WeAreTheArtMakers/watamai/releases/download/v2.0.0/WATAM-AI-2.0.0-portable.exe) (Portable)
 2. Run the installer or portable executable
 3. Follow installation wizard (installer only)
 4. Launch WATAM AI
+5. **Important:** Click "More info" → "Run anyway" if Windows Defender SmartScreen appears (app is not code-signed)
 
 ---
 

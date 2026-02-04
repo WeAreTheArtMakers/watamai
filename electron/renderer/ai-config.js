@@ -61,14 +61,28 @@ async function initAIConfig() {
   updateAgentStatus();
 }
 
-// Load Ollama models dynamically
+// Load Ollama models dynamically - WITH CACHE
+let ollamaModelsCache = null;
+let ollamaModelsLastFetch = 0;
+const OLLAMA_CACHE_DURATION = 60000; // 1 minute cache
+
 async function loadOllamaModels() {
   try {
+    // Use cache if available and fresh
+    const now = Date.now();
+    if (ollamaModelsCache && (now - ollamaModelsLastFetch) < OLLAMA_CACHE_DURATION) {
+      console.log('[AI] Using cached Ollama models');
+      AI_PROVIDERS.ollama.models = ollamaModelsCache;
+      return;
+    }
+    
     console.log('[AI] Loading Ollama models...');
     const result = await window.electronAPI.getOllamaModels();
     
     if (result.success && result.models && result.models.length > 0) {
       AI_PROVIDERS.ollama.models = result.models;
+      ollamaModelsCache = result.models;
+      ollamaModelsLastFetch = now;
       console.log('[AI] Loaded Ollama models:', result.models);
     } else {
       // Fallback to common models if Ollama not running
@@ -347,7 +361,8 @@ async function updateModelOptions(provider) {
   }
   
   // Clear existing options and show loading
-  modelSelect.innerHTML = '<option value="">-- Loading models... --</option>';
+  const loadingText = window.translateText ? window.translateText('Loading models...') : 'Loading models...';
+  modelSelect.innerHTML = `<option value="">-- ${loadingText} --</option>`;
   
   try {
     // For Ollama, reload models dynamically
@@ -364,7 +379,8 @@ async function updateModelOptions(provider) {
     }
     
     // Clear and rebuild options
-    modelSelect.innerHTML = '<option value="">-- Select Model --</option>';
+    const selectText = window.translateText ? window.translateText('Select Model') : 'Select Model';
+    modelSelect.innerHTML = `<option value="">-- ${selectText} --</option>`;
     
     // Get current models for the provider
     const models = AI_PROVIDERS[provider].models || [];
@@ -372,16 +388,18 @@ async function updateModelOptions(provider) {
     if (models.length === 0) {
       const option = document.createElement('option');
       option.disabled = true;
-      option.textContent = provider === 'ollama' ? 
-        '--- No models found. Run: ollama pull llama3.2 ---' : 
-        '--- No models available ---';
+      const noModelsText = provider === 'ollama' ? 
+        (window.translateText ? window.translateText('No models found. Run: ollama pull llama3.2') : 'No models found. Run: ollama pull llama3.2') : 
+        (window.translateText ? window.translateText('No models available') : 'No models available');
+      option.textContent = `--- ${noModelsText} ---`;
       modelSelect.appendChild(option);
     } else {
       // Add section header for Ollama
       if (provider === 'ollama') {
         const note = document.createElement('option');
         note.disabled = true;
-        note.textContent = `--- ${models.length} Installed Models ---`;
+        const installedText = window.translateText ? window.translateText('Installed Models') : 'Installed Models';
+        note.textContent = `--- ${models.length} ${installedText} ---`;
         modelSelect.appendChild(note);
       }
       
@@ -405,7 +423,8 @@ async function updateModelOptions(provider) {
     
   } catch (error) {
     console.error('[AI] Error updating model options:', error);
-    modelSelect.innerHTML = '<option value="">-- Error loading models --</option>';
+    const errorText = window.translateText ? window.translateText('Error loading models') : 'Error loading models';
+    modelSelect.innerHTML = `<option value="">-- ${errorText} --</option>`;
   }
 }
 
@@ -1262,13 +1281,8 @@ window.aiConfigModule = {
   updateModelOptions,
 };
 
-// Auto-initialize if AI config page exists on load
-document.addEventListener('DOMContentLoaded', () => {
-  if (document.getElementById('ai-config')) {
-    console.log('[AI] AI config page found on DOMContentLoaded, initializing...');
-    initAIConfig();
-  }
-});
+// REMOVED: DOMContentLoaded listener - app.js handles initialization
+// This was causing multiple initializations and event listener leaks
 
 // Listen for agent status updates from backend
 if (window.electronAPI && window.electronAPI.onAgentStatusUpdate) {

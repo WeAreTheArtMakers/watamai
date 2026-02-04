@@ -62,6 +62,14 @@
         </div>
       </nav>
 
+      <!-- Language Selector Dropdown -->
+      <div class="language-selector">
+        <select id="languageSelect" class="language-dropdown">
+          <option value="en">🇬🇧 English</option>
+          <option value="tr">🇹🇷 Türkçe</option>
+        </select>
+      </div>
+
       <div class="safe-mode">
         <label class="switch">
           <input type="checkbox" id="safeModeToggle" checked>
@@ -616,7 +624,7 @@
           <div class="skills-progress">
             <div class="skill-item">
               <div class="skill-header">
-                <span class="skill-name">Basic Posting</span>
+                <span class="skill-name">📝 Basic Posting</span>
                 <span class="skill-level">✅ Mastered</span>
               </div>
               <div class="skill-description">Create and publish posts to submolts</div>
@@ -624,7 +632,7 @@
 
             <div class="skill-item">
               <div class="skill-header">
-                <span class="skill-name">Comment Engagement</span>
+                <span class="skill-name">💬 Comment Engagement</span>
                 <span class="skill-level">🔄 Learning</span>
               </div>
               <div class="skill-description">Reply to posts and engage in discussions</div>
@@ -635,7 +643,7 @@
 
             <div class="skill-item locked">
               <div class="skill-header">
-                <span class="skill-name">Submolt Creation</span>
+                <span class="skill-name">🏗️ Submolt Creation</span>
                 <span class="skill-level">🔒 Locked</span>
               </div>
               <div class="skill-description">Create and manage your own submolts</div>
@@ -644,7 +652,7 @@
 
             <div class="skill-item locked">
               <div class="skill-header">
-                <span class="skill-name">Moderation Tools</span>
+                <span class="skill-name">🛡️ Moderation Tools</span>
                 <span class="skill-level">🔒 Locked</span>
               </div>
               <div class="skill-description">Help moderate communities</div>
@@ -653,54 +661,65 @@
           </div>
         </div>
 
-        <!-- External Integrations -->
-        <div class="card">
-          <h3>🔗 External Integrations</h3>
-          <p class="card-description">Connect your agent to external services and APIs</p>
-          
-          <div class="integrations-grid">
-            <div class="integration-item">
-              <div class="integration-icon">🐦</div>
-              <div class="integration-content">
-                <h4>Twitter/X Integration</h4>
-                <p>Cross-post to Twitter and sync engagement</p>
-                <button class="btn btn-secondary btn-sm">🚧 Coming Soon</button>
-              </div>
-            </div>
-
-            <div class="integration-item">
-              <div class="integration-icon">📊</div>
-              <div class="integration-content">
-                <h4>Analytics Dashboard</h4>
-                <p>Track performance and engagement metrics</p>
-                <button class="btn btn-secondary btn-sm">🚧 Coming Soon</button>
-              </div>
-            </div>
-
-            <div class="integration-item">
-              <div class="integration-icon">🤖</div>
-              <div class="integration-content">
-                <h4>Custom AI Models</h4>
-                <p>Train custom models on your content</p>
-                <button class="btn btn-secondary btn-sm">🚧 Coming Soon</button>
-              </div>
-            </div>
-
-            <div class="integration-item">
-              <div class="integration-icon">📱</div>
-              <div class="integration-content">
-                <h4>Mobile Notifications</h4>
-                <p>Get notified of important events</p>
-                <button class="btn btn-secondary btn-sm">🚧 Coming Soon</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <!-- Advanced Configuration -->
         <div class="card">
           <h3>⚙️ Advanced Configuration</h3>
-          <p class="card-description">Fine-tune your agent's technical behavior</p>
+          <p class="card-description">Fine-tune your agent's technical behavior and integrations</p>
+          
+          <!-- External Integrations Section -->
+          <div style="margin-bottom: 32px; padding-bottom: 32px; border-bottom: 1px solid var(--border-color);">
+            <h4 style="margin-bottom: 16px; font-size: 16px; font-weight: 600;">🔗 External Integrations</h4>
+            <p style="margin-bottom: 16px; color: var(--text-secondary); font-size: 14px;">Connect your agent to external services and APIs</p>
+            
+            <div class="integrations-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+              <div class="integration-item" style="padding: 16px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary);">
+                <div style="display: flex; align-items: flex-start; gap: 12px;">
+                  <div class="integration-icon" style="font-size: 32px; line-height: 1;">🐦</div>
+                  <div class="integration-content" style="flex: 1;">
+                    <h5 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600;">Twitter/X Integration</h5>
+                    <p style="margin: 0 0 8px 0; font-size: 13px; color: var(--text-secondary);">Cross-post to Twitter and sync engagement</p>
+                    <button class="btn btn-secondary btn-sm" style="font-size: 12px; padding: 4px 12px;">🚧 Coming Soon</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="integration-item" style="padding: 16px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary);">
+                <div style="display: flex; align-items: flex-start; gap: 12px;">
+                  <div class="integration-icon" style="font-size: 32px; line-height: 1;">📊</div>
+                  <div class="integration-content" style="flex: 1;">
+                    <h5 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600;">Analytics Dashboard</h5>
+                    <p style="margin: 0 0 8px 0; font-size: 13px; color: var(--text-secondary);">Track performance and engagement metrics</p>
+                    <button class="btn btn-secondary btn-sm" style="font-size: 12px; padding: 4px 12px;">🚧 Coming Soon</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="integration-item" style="padding: 16px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary);">
+                <div style="display: flex; align-items: flex-start; gap: 12px;">
+                  <div class="integration-icon" style="font-size: 32px; line-height: 1;">🤖</div>
+                  <div class="integration-content" style="flex: 1;">
+                    <h5 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600;">Custom AI Models</h5>
+                    <p style="margin: 0 0 8px 0; font-size: 13px; color: var(--text-secondary);">Train custom models on your content</p>
+                    <button class="btn btn-secondary btn-sm" style="font-size: 12px; padding: 4px 12px;">🚧 Coming Soon</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="integration-item" style="padding: 16px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary);">
+                <div style="display: flex; align-items: flex-start; gap: 12px;">
+                  <div class="integration-icon" style="font-size: 32px; line-height: 1;">📱</div>
+                  <div class="integration-content" style="flex: 1;">
+                    <h5 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600;">Mobile Notifications</h5>
+                    <p style="margin: 0 0 8px 0; font-size: 13px; color: var(--text-secondary);">Get notified of important events</p>
+                    <button class="btn btn-secondary btn-sm" style="font-size: 12px; padding: 4px 12px;">🚧 Coming Soon</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Technical Settings -->
+          <h4 style="margin-bottom: 16px; font-size: 16px; font-weight: 600;">🔧 Technical Settings</h4>
           
           <div class="form-group">
             <label for="apiTimeout">API Timeout (seconds)</label>
@@ -803,11 +822,14 @@
             <textarea id="draftBody" rows="10" placeholder="Write your post content here..."></textarea>
           </div>
 
-          <div class="form-group">
-            <label>
-              <input type="checkbox" id="includeWatam">
-              Include WATAM CTA
+          <div class="form-group" style="margin: 16px 0;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+              <input type="checkbox" id="includeWatam" style="width: 18px; height: 18px; cursor: pointer;">
+              <span style="font-weight: 500;">Include WATAM CTA</span>
             </label>
+            <small style="display: block; margin-top: 4px; margin-left: 26px; color: var(--text-tertiary);">
+              Add "Learn more at wearetheartmakers.com" to the end of your post
+            </small>
           </div>
 
           <div class="form-actions">
@@ -1106,6 +1128,19 @@
           <p class="card-description">Traditional agent registration with direct API key</p>
           
           <div id="agentNotRegistered" class="agent-section">
+            <!-- IP Limit Warning - Only shown when not registered -->
+            <div class="info-box" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-left: 4px solid #f59e0b; border-radius: 8px; padding: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.1);">
+              <div style="display: flex; align-items: start; gap: 12px;">
+                <span style="font-size: 24px; line-height: 1;">⚠️</span>
+                <div style="flex: 1;">
+                  <strong style="color: #92400e; display: block; margin-bottom: 6px; font-size: 14px;">Registration Limit</strong>
+                  <p style="margin: 0; color: #78350f; font-size: 13px; line-height: 1.6;">
+                    Only 1 agent can be registered per IP address per day. If you already have an agent, use "Load from .env" instead.
+                  </p>
+                </div>
+              </div>
+            </div>
+            
             <p class="info-text">Register your agent with Moltbook to start posting and commenting.</p>
             
             <div class="form-group">
@@ -1121,7 +1156,9 @@
 
             <div class="form-actions">
               <button id="registerAgentBtn" class="btn btn-primary">Register Agent</button>
+              <button id="loadFromEnvBtn" class="btn btn-secondary">Load from .env</button>
             </div>
+            <small style="color: #888; margin-top: 8px; display: block;">💡 If you already have an agent in .env file, click "Load from .env"</small>
           </div>
 
           <div id="agentRegistered" class="agent-section hidden">
@@ -1446,8 +1483,10 @@ Example:
     </div>
   </div>
 
-  <script src="settings.js"></script>
-  <script src="ai-config.js"></script>
-  <script src="app.js"></script>
+  <!-- Cache buster to force reload after fixes -->
+  <script src="language-manager.js?v=2.0.9"></script>
+  <script src="settings.js?v=2.0.9"></script>
+  <script src="ai-config.js?v=2.0.9"></script>
+  <script src="app.js?v=2.0.9"></script>
 </body>
 </html>
