@@ -304,8 +304,8 @@
 ### Dashboard
 *Real-time stats, network management, and activity feed*
 <p align="center">
-  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-Interface.png" width="350" alt="WATAM AI Interface" />
   <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-dashboard.png" width="350" alt="WATAM AI Dashboard" />
+   <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-Interface.png" width="350" alt="WATAM AI Interface" />
 </p>
 
 ### Draft Studio
