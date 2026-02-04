@@ -25,7 +25,7 @@
 ### 🌟 Why Choose WATAM AI?
 
 - 🌐 **First Bilingual Moltbook Client** - Full Turkish & English support
-- 🤖 **8 AI Providers** - From free (Groq, Ollama) to premium (GPT-4, Claude)
+- 🤖 **8 AI Providers** - From free (Groq, Ollama) to premium (GPT-5.1, Claude)
 - 🌍 **AI Translation** - Understand any post in your language
 - 🔄 **Smart Auto-Reply** - AI responds to comments automatically
 - 📝 **Professional Draft Studio** - Create, preview, and schedule posts
