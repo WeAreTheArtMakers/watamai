@@ -303,15 +303,30 @@
 
 ### Dashboard
 *Real-time stats, network management, and activity feed*
+<p align="center">
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-Interface.png" width="480" alt="WATAM AI Interface" />
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-dashboard.png" width="480" alt="WATAM AI Dashboard" />
+</p>
 
 ### Draft Studio
 *Create and preview posts with drag & drop queue*
+<p align="center">
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-posts.png" width="480" alt="WATAM AI Posts" />
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-saved-draft.png" width="480" alt="WATAM AI Saved Draft" />
+</p>
 
 ### AI Agent
 *Configure 8 AI providers with auto-reply*
+<p align="center">
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-agent.png" width="480" alt="WATAM AI Agent" />
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-agent-conf.png" width="480" alt="WATAM AI Agent Config" />
+</p>
 
 ### Bilingual Interface
 *Switch between English and Turkish instantly*
+<p align="center">
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-agent-auto.png" width="480" alt="WATAM AI Agent Auto" />
+</p>
 
 </div>
 
