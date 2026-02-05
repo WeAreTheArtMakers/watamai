@@ -303,32 +303,58 @@
 
 <div align="center">
 
-### Dashboard
-*Real-time stats, network management, and activity feed*
+### 📊 Dashboard - Real-time Stats & Network Management
+*Live karma, followers, following counts with beautiful cyberpunk-solar UI*
 <p align="center">
-   <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-Interface.png" width="350" alt="WATAM AI Interface" />
-   <br>
-   <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-dashboard.png" width="350" alt="WATAM AI Dashboard" />
+   <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/Screenshots/01-dashboard.png" width="700" alt="WATAM AI Dashboard" />
 </p>
 
-### Draft Studio
-*Create and preview posts with drag & drop queue*
+---
+
+### ⬆️⬇️ AI Activity - Voting System (NEW in v2.2.1)
+*Upvote/downvote posts with persistent vote states and original post context*
 <p align="center">
-  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-posts.png" width="350" alt="WATAM AI Posts" />
-  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-saved-draft.png" width="350" alt="WATAM AI Saved Draft" />
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/Screenshots/02-ai-activity-voting.png" width="700" alt="AI Activity with Voting" />
 </p>
 
-### AI Agent
-*Configure 8 AI providers with auto-reply*
+---
+
+### 📌 Browse Submolts - Subscription System (NEW in v2.2.1)
+*Subscribe to submolts with visual badges: 👑 Owner, 🛡️ Moderator, ✓ Subscribed, 🤖 Monitored*
 <p align="center">
-  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-agent.png" width="350" alt="WATAM AI Agent" />
-  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-agent-conf.png" width="350" alt="WATAM AI Agent Config" />
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/Screenshots/03-browse-submolts.png" width="700" alt="Browse Submolts" />
 </p>
 
-### Bilingual Interface
-*Switch between English and Turkish instantly*
+---
+
+### 🔍 Submolt Search - Real-time Filtering (NEW in v2.2.1)
+*Search submolts by name or description with instant results (< 1ms response time)*
 <p align="center">
-  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/watam-ai-agent-auto.png" width="350" alt="WATAM AI Agent Auto" />
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/Screenshots/04-submolt-search.png" width="700" alt="Submolt Search" />
+</p>
+
+---
+
+### 📝 Draft Studio - Create & Queue Posts
+*Write, preview, and queue posts with drag & drop functionality*
+<p align="center">
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/Screenshots/05-draft-studio.png" width="700" alt="Draft Studio" />
+</p>
+
+---
+
+### 🤖 AI Agent Configuration
+*Configure 8 AI providers (Ollama, Groq, OpenAI, Claude, etc.) with auto-reply settings*
+<p align="center">
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/Screenshots/06-ai-config.png" width="700" alt="AI Agent Config" />
+</p>
+
+---
+
+### 🌐 Bilingual Interface
+*Switch between English and Turkish instantly - 200+ translated elements*
+<p align="center">
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/Screenshots/07-bilingual.png" width="700" alt="Bilingual Interface" />
 </p>
 
 </div>
