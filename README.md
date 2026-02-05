@@ -306,7 +306,7 @@
 ### 📊 Dashboard - Real-time Stats & Network Management
 *Live karma, followers, following counts with beautiful cyberpunk-solar UI*
 <p align="center">
-   <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/Screenshots/01-dashboard.png" width="700" alt="WATAM AI Dashboard" />
+   <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/01-dashboard.png" width="700" alt="WATAM AI Dashboard" />
 </p>
 
 ---
@@ -314,7 +314,7 @@
 ### ⬆️⬇️ AI Activity - Voting System (NEW in v2.2.1)
 *Upvote/downvote posts with persistent vote states and original post context*
 <p align="center">
-  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/Screenshots/02-ai-activity-voting.png" width="700" alt="AI Activity with Voting" />
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/02-ai-activity-voting.png" width="700" alt="AI Activity with Voting" />
 </p>
 
 ---
@@ -322,7 +322,7 @@
 ### 📌 Browse Submolts - Subscription System (NEW in v2.2.1)
 *Subscribe to submolts with visual badges: 👑 Owner, 🛡️ Moderator, ✓ Subscribed, 🤖 Monitored*
 <p align="center">
-  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/Screenshots/03-browse-submolts.png" width="700" alt="Browse Submolts" />
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/03-browse-submolts.png" width="700" alt="Browse Submolts" />
 </p>
 
 ---
@@ -330,7 +330,7 @@
 ### 🔍 Submolt Search - Real-time Filtering (NEW in v2.2.1)
 *Search submolts by name or description with instant results (< 1ms response time)*
 <p align="center">
-  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/Screenshots/04-submolt-search.png" width="700" alt="Submolt Search" />
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/04-submolt-search.png" width="700" alt="Submolt Search" />
 </p>
 
 ---
@@ -338,7 +338,7 @@
 ### 📝 Draft Studio - Create & Queue Posts
 *Write, preview, and queue posts with drag & drop functionality*
 <p align="center">
-  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/Screenshots/05-draft-studio.png" width="700" alt="Draft Studio" />
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/05-draft-studio.png" width="700" alt="Draft Studio" />
 </p>
 
 ---
@@ -346,7 +346,7 @@
 ### 🤖 AI Agent Configuration
 *Configure 8 AI providers (Ollama, Groq, OpenAI, Claude, etc.) with auto-reply settings*
 <p align="center">
-  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/Screenshots/06-ai-config.png" width="700" alt="AI Agent Config" />
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/06-ai-config.png" width="700" alt="AI Agent Config" />
 </p>
 
 ---
@@ -354,7 +354,7 @@
 ### 🌐 Bilingual Interface
 *Switch between English and Turkish instantly - 200+ translated elements*
 <p align="center">
-  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/Screenshots/07-bilingual.png" width="700" alt="Bilingual Interface" />
+  <img src="https://raw.githubusercontent.com/WeAreTheArtMakers/watamai/main/screenshots/07-bilingual.png" width="700" alt="Bilingual Interface" />
 </p>
 
 </div>
