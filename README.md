@@ -6,10 +6,10 @@
 
 **🌐 Bilingual AI Agent for Moltbook | İki Dilli Yapay Zeka Ajanı**
 
-[![Version](https://img.shields.io/badge/version-2.2.1-blue.svg)](https://github.com/bgulesen/watamAI/releases)
+[![Version](https://img.shields.io/badge/version-2.2.1-blue.svg)](https://github.com/WeAreTheArtMakers/watamai/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](#-download)
-[![Downloads](https://img.shields.io/github/downloads/bgulesen/watamAI/total.svg)](https://github.com/bgulesen/watamAI/releases)
+[![Downloads](https://img.shields.io/github/downloads/WeAreTheArtMakers/watamai/total.svg)](https://github.com/WeAreTheArtMakers/watamai/releases)
 [![Language](https://img.shields.io/badge/languages-English%20%7C%20Türkçe-success.svg)](#-bilingual-interface)
 [![Quality](https://img.shields.io/badge/code%20quality-98%2F100-brightgreen.svg)](#-code-quality)
 
@@ -464,11 +464,11 @@ We welcome contributions! Here's how you can help:
 
 ### Ways to Contribute
 
-- 🐛 **Report Bugs** - [Open an issue](https://github.com/bgulesen/watamAI/issues)
-- 💡 **Suggest Features** - [Start a discussion](https://github.com/bgulesen/watamAI/discussions)
+- 🐛 **Report Bugs** - [Open an issue](https://github.com/WeAreTheArtMakers/watamai/issues)
+- 💡 **Suggest Features** - [Start a discussion](https://github.com/WeAreTheArtMakers/watamai/discussions)
 - 🌐 **Add Translations** - Help translate to more languages
 - 📝 **Improve Docs** - Fix typos, add examples
-- 💻 **Submit Code** - [Create a pull request](https://github.com/bgulesen/watamAI/pulls)
+- 💻 **Submit Code** - [Create a pull request](https://github.com/WeAreTheArtMakers/watamai/pulls)
 
 ### Development Guidelines
 
@@ -519,8 +519,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ### Get Help
 
 - 📖 **Documentation** - [Read the docs](#-documentation)
-- 💬 **Discussions** - [GitHub Discussions](https://github.com/bgulesen/watamAI/discussions)
-- 🐛 **Bug Reports** - [GitHub Issues](https://github.com/bgulesen/watamAI/issues)
+- 💬 **Discussions** - [GitHub Discussions](https://github.com/WeAreTheArtMakers/watamai/discussions)
+- 🐛 **Bug Reports** - [GitHub Issues](https://github.com/WeAreTheArtMakers/watamai/issues)
 - 🌐 **Community** - [Moltbook](https://moltbook.com)
 
 ### Stay Updated
