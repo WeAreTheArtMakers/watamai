@@ -190,6 +190,7 @@ class LanguageManager {
         'Create and preview posts before publishing': 'Create and preview posts before publishing',
         'Submolt': 'Submolt',
         'Choose the right submolt for better engagement': 'Choose the right submolt for better engagement',
+        'Manage': 'Manage',
         'Create New': 'Create New',
         'Topic / Title': 'Topic / Title',
         'Post Content': 'Post Content',
@@ -207,8 +208,44 @@ class LanguageManager {
         'views': 'views',
         'comments': 'comments',
         'View Comments': 'View Comments',
+        
+        // My Submolts
+        'My Submolts': 'My Submolts',
+        'Manage submolts you own or moderate': 'Manage submolts you own or moderate',
+        'Create New Submolt': 'Create New Submolt',
+        'No Submolts Yet': 'No Submolts Yet',
+        "You haven't created any submolts yet.": "You haven't created any submolts yet.",
+        'Create Your First Submolt': 'Create Your First Submolt',
+        'subscribers': 'subscribers',
+        'posts': 'posts',
         'Quick Reply': 'Quick Reply',
         'Auto-posted': 'Auto-posted',
+        
+        // AI Activity
+        'AI Activity': 'AI Activity',
+        'View all automatic replies from your AI agent': 'View all automatic replies from your AI agent',
+        'Clear History': 'Clear History',
+        'Replies Today': 'Replies Today',
+        'Replies This Hour': 'Replies This Hour',
+        'Total Tracked': 'Total Tracked',
+        'No AI Activity Yet': 'No AI Activity Yet',
+        "Your AI agent hasn't posted any automatic replies yet.": "Your AI agent hasn't posted any automatic replies yet.",
+        'Make sure your AI agent is running and configured properly.': 'Make sure your AI agent is running and configured properly.',
+        'Replied to': 'Replied to',
+        'View Post': 'View Post',
+        'Show Original': 'Show Original',
+        'Read More': 'Read More',
+        'Close': 'Close',
+        'Original Post:': 'Original Post:',
+        'AI Reply:': 'AI Reply:',
+        'Upvote': 'Upvote',
+        'Downvote': 'Downvote',
+        'Upvoted': 'Upvoted',
+        'Downvoted': 'Downvoted',
+        'Subscribe': 'Subscribe',
+        'Subscribed': 'Subscribed',
+        'Unsubscribe': 'Unsubscribe',
+        'Not subscribed': 'Not subscribed',
         
         // AI Agent
         'AI Agent Configuration': 'AI Agent Configuration',
@@ -635,6 +672,7 @@ class LanguageManager {
         'Create and preview posts before publishing': 'Yayınlamadan önce gönderi oluştur ve önizle',
         'Submolt': 'Submolt',
         'Choose the right submolt for better engagement': 'Daha iyi etkileşim için doğru submolt\'u seç',
+        'Manage': 'Yönet',
         'Create New': 'Yeni Oluştur',
         'Topic / Title': 'Konu / Başlık',
         'Post Content': 'Gönderi İçeriği',
@@ -646,6 +684,71 @@ class LanguageManager {
         'Refresh': 'Yenile',
         'Fix URLs': 'URL\'leri Düzelt',
         'posts queued': 'gönderi kuyrukta',
+        
+        // My Submolts
+        'My Submolts': 'Submoltlarım',
+        'Manage submolts you own or moderate': 'Sahip olduğun veya yönettiğin submoltları yönet',
+        'Create New Submolt': 'Yeni Submolt Oluştur',
+        'No Submolts Yet': 'Henüz Submolt Yok',
+        "You haven't created any submolts yet.": 'Henüz hiç submolt oluşturmadın.',
+        'Create Your First Submolt': 'İlk Submoltunu Oluştur',
+        'subscribers': 'abone',
+        'posts': 'gönderi',
+        'NEXT POST AVAILABLE': 'SONRAKİ GÖNDERİ MÜSAİT',
+        
+        // AI Activity
+        'AI Activity': 'AI Aktivitesi',
+        'View all automatic replies from your AI agent': 'AI ajanının tüm otomatik yanıtlarını görüntüle',
+        'Clear History': 'Geçmişi Temizle',
+        'Replies Today': 'Bugünkü Yanıtlar',
+        'Replies This Hour': 'Bu Saatteki Yanıtlar',
+        'Total Tracked': 'Toplam Kayıtlı',
+        'No AI Activity Yet': 'Henüz AI Aktivitesi Yok',
+        "Your AI agent hasn't posted any automatic replies yet.": 'AI ajanın henüz otomatik yanıt göndermedi.',
+        'Make sure your AI agent is running and configured properly.': 'AI ajanının çalıştığından ve doğru yapılandırıldığından emin ol.',
+        'Replied to': 'Yanıtlanan',
+        'View Post': 'Gönderiyi Görüntüle',
+        'Show Original': 'Orijinali Göster',
+        'Read More': 'Devamını Oku',
+        'Close': 'Kapat',
+        'Original Post:': 'Orijinal Gönderi:',
+        'AI Reply:': 'AI Yanıtı:',
+        
+        // Voting System
+        'Upvote': 'Beğen',
+        'Downvote': 'Beğenme',
+        'Upvoted': 'Beğenildi',
+        'Downvoted': 'Beğenilmedi',
+        '✅ Upvoted!': '✅ Beğenildi!',
+        '✅ Downvoted': '✅ Beğenilmedi',
+        '❌ Upvote failed': '❌ Beğenme başarısız',
+        '❌ Downvote failed': '❌ Beğenmeme başarısız',
+        '⏳ Upvoting...': '⏳ Beğeniliyor...',
+        '⏳ Downvoting...': '⏳ Beğenilmiyor...',
+        '✓ Upvoted': '✓ Beğenildi',
+        '✓ Downvoted': '✓ Beğenilmedi',
+        '✅ Comment upvoted!': '✅ Yorum beğenildi!',
+        
+        // Submolt Subscription
+        'Subscribe': 'Abone Ol',
+        'Subscribed': 'Abone Olundu',
+        'Unsubscribe': 'Abonelikten Çık',
+        'Not subscribed': 'Abone değil',
+        '✅ Subscribed!': '✅ Abone olundu!',
+        '✅ Unsubscribed': '✅ Abonelikten çıkıldı',
+        '❌ Operation failed': '❌ İşlem başarısız',
+        '⏳ Subscribing...': '⏳ Abone oluyor...',
+        '⏳ Unsubscribing...': '⏳ Abonelikten çıkılıyor...',
+        '✓ Subscribed': '✓ Abone Olundu',
+        '+ Subscribe': '+ Abone Ol',
+        'Browse Submolts': 'Submoltları Keşfet',
+        'Discover and subscribe to submolts': 'Submoltları keşfet ve abone ol',
+        'No Submolts Available': 'Submolt Bulunamadı',
+        'No submolts found on Moltbook.': 'Moltbook\'ta submolt bulunamadı.',
+        '🤖 Monitored': '🤖 İzleniyor',
+        '🔍 Search submolts by name or description...': '🔍 İsim veya açıklamaya göre ara...',
+        'Clear': 'Temizle',
+        
         'NEXT POST AVAILABLE': 'SONRAKİ GÖNDERİ MÜSAİT',
         'Due to Moltbook rate limits': 'Moltbook hız limitleri nedeniyle',
         'View on Moltbook': 'Moltbook\'ta Görüntüle',
@@ -1591,6 +1694,12 @@ class LanguageManager {
     
     if (!bodyElement) return;
     
+    // Check if already translated
+    if (translateBtn && translateBtn.classList.contains('translated')) {
+      console.log('[LanguageManager] Comment already translated, skipping');
+      return;
+    }
+    
     if (translateBtn) {
       translateBtn.textContent = '⏳ Çevriliyor...';
       translateBtn.disabled = true;
@@ -1636,6 +1745,120 @@ class LanguageManager {
   async translatePosts() {
     // This method is no longer used - posts are translated manually via button
     console.log('[LanguageManager] Auto-translation disabled - use translate buttons');
+  }
+  
+  // Translate AI reply card (similar to translatePost)
+  async translateAIReply(replyId) {
+    if (this.currentLanguage === 'en') {
+      console.log('[LanguageManager] English selected, no translation needed');
+      return;
+    }
+    
+    console.log('[LanguageManager] Translating AI reply:', replyId);
+    
+    const replyCard = document.querySelector(`[data-reply-id="${replyId}"]`);
+    if (!replyCard) {
+      console.error('[LanguageManager] Reply card not found:', replyId);
+      return;
+    }
+    
+    // Add loading state
+    replyCard.classList.add('translating');
+    
+    // Find elements
+    const titleElement = replyCard.querySelector('.post-header h4');
+    const contextText = replyCard.querySelector('.ai-context-text');
+    const replyText = replyCard.querySelector('.ai-reply-text');
+    const translateBtn = replyCard.querySelector('.translate-ai-reply-btn');
+    
+    if (translateBtn) {
+      translateBtn.textContent = '⏳ Çevriliyor...';
+      translateBtn.disabled = true;
+    }
+    
+    try {
+      // Translate post title
+      if (titleElement) {
+        const originalTitle = titleElement.getAttribute('data-original') || titleElement.textContent;
+        if (!titleElement.hasAttribute('data-original')) {
+          titleElement.setAttribute('data-original', originalTitle);
+        }
+        
+        const translatedTitle = await this.translateLiveContent(originalTitle);
+        const linkElement = titleElement.querySelector('a');
+        if (linkElement) {
+          linkElement.textContent = translatedTitle;
+        } else {
+          titleElement.textContent = translatedTitle;
+        }
+      }
+      
+      // Translate context (original post)
+      if (contextText) {
+        const isExpanded = contextText.classList.contains('expanded');
+        const originalContext = contextText.getAttribute('data-original') || contextText.textContent;
+        
+        if (!contextText.hasAttribute('data-original')) {
+          contextText.setAttribute('data-original', originalContext);
+        }
+        
+        const translatedContext = await this.translateLiveContent(originalContext);
+        
+        if (isExpanded) {
+          contextText.textContent = translatedContext;
+        } else {
+          contextText.textContent = translatedContext.substring(0, 150) + (translatedContext.length > 150 ? '...' : '');
+        }
+        
+        // Update data-full with translated text
+        contextText.setAttribute('data-full', translatedContext.replace(/\n/g, '\\n'));
+      }
+      
+      // Translate AI reply
+      if (replyText) {
+        const isExpanded = replyText.classList.contains('expanded');
+        const originalReply = replyText.getAttribute('data-original') || replyText.textContent;
+        
+        if (!replyText.hasAttribute('data-original')) {
+          replyText.setAttribute('data-original', originalReply);
+        }
+        
+        const translatedReply = await this.translateLiveContent(originalReply);
+        
+        if (isExpanded) {
+          replyText.textContent = translatedReply;
+        } else {
+          replyText.textContent = translatedReply.substring(0, 200) + (translatedReply.length > 200 ? '...' : '');
+        }
+        
+        // Update data-full with translated text
+        replyText.setAttribute('data-full', translatedReply.replace(/\n/g, '\\n'));
+      }
+      
+      // Update button
+      if (translateBtn) {
+        translateBtn.textContent = '✓ Çevrildi';
+        translateBtn.classList.add('translated');
+      }
+      
+      console.log('[LanguageManager] ✓ AI reply translated:', replyId);
+    } catch (error) {
+      console.error('[LanguageManager] Failed to translate AI reply:', error);
+      
+      // Show user-friendly error message
+      if (window.showNotification) {
+        const errorMsg = error.message || 'Çeviri başarısız oldu';
+        window.showNotification('❌ ' + errorMsg, 'error');
+      }
+      
+      if (translateBtn) {
+        translateBtn.textContent = '🌐 Çevir';
+        translateBtn.disabled = false;
+        translateBtn.classList.remove('translated');
+      }
+    } finally {
+      replyCard.classList.remove('translating');
+    }
   }
 
   // Clear translation cache

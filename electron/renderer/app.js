@@ -223,6 +223,12 @@ async function loadPageData(pageName) {
     case 'posts':
       await loadPosts();
       break;
+    case 'submolts':
+      await loadMySubmolts();
+      break;
+    case 'ai-activity':
+      await loadAIActivity();
+      break;
     case 'logs':
       await loadLogs();
       break;
@@ -763,7 +769,7 @@ function setupEventListeners() {
   const submoltSearch = document.getElementById('submoltSearch');
   if (submoltSearch) {
     submoltSearch.addEventListener('input', (e) => {
-      filterSubmolts(e.target.value);
+      filterSubmoltDropdown(e.target.value);
     });
   }
 
@@ -772,6 +778,20 @@ function setupEventListeners() {
   if (createSubmoltBtn) {
     createSubmoltBtn.addEventListener('click', () => {
       showCreateSubmoltDialog();
+    });
+  }
+  
+  // Setup manage submolt button
+  const manageSubmoltBtn = document.getElementById('manageSubmoltBtn');
+  if (manageSubmoltBtn) {
+    manageSubmoltBtn.addEventListener('click', async () => {
+      const submoltSelect = document.getElementById('submolt');
+      const selectedSubmolt = submoltSelect ? submoltSelect.value : '';
+      if (selectedSubmolt) {
+        await showManageSubmoltDialog(selectedSubmolt);
+      } else {
+        showNotification('❌ Please select a submolt first', 'error');
+      }
     });
   }
 
@@ -1311,6 +1331,37 @@ Key Guidelines:
     }
   });
   
+  // Listen for agent status updates (AI replies)
+  window.electronAPI.onAgentStatusUpdate((data) => {
+    console.log('[App] 🤖 Agent status update:', data);
+    
+    // Update "REPLIES TODAY" counter in Agent Status section
+    const repliesTodayStatus = document.getElementById('repliesTodayStatus');
+    if (repliesTodayStatus && data.repliesToday !== undefined) {
+      repliesTodayStatus.textContent = data.repliesToday;
+    }
+    
+    // Update last check time
+    const lastCheckStatus = document.getElementById('lastCheckStatus');
+    if (lastCheckStatus && data.lastCheck) {
+      const checkTime = new Date(data.lastCheck);
+      lastCheckStatus.textContent = checkTime.toLocaleTimeString();
+    }
+    
+    // Show notification for new reply
+    if (data.lastReply) {
+      showNotification(
+        `🤖 AI replied to: ${data.lastReply.postTitle.substring(0, 50)}...`,
+        'success'
+      );
+    }
+    
+    // Refresh AI Activity page if visible
+    if (document.getElementById('ai-activity')?.classList.contains('active')) {
+      loadAIActivity();
+    }
+  });
+  
   // Skills Page - Advanced Configuration Buttons
   const saveAdvancedConfigBtn = document.getElementById('saveAdvancedConfigBtn');
   if (saveAdvancedConfigBtn) {
@@ -1399,6 +1450,707 @@ Key Guidelines:
       input.click();
     });
   }
+  
+  // My Submolts page buttons
+  const refreshSubmoltsBtn = document.getElementById('refreshSubmoltsBtn');
+  if (refreshSubmoltsBtn) {
+    refreshSubmoltsBtn.addEventListener('click', async () => {
+      await loadMySubmolts();
+    });
+  }
+  
+  const createNewSubmoltBtn = document.getElementById('createNewSubmoltBtn');
+  if (createNewSubmoltBtn) {
+    createNewSubmoltBtn.addEventListener('click', () => {
+      showCreateSubmoltDialog();
+    });
+  }
+  
+  // Submolt search functionality
+  const submoltSearchInput = document.getElementById('submoltSearchInput');
+  const clearSubmoltSearchBtn = document.getElementById('clearSubmoltSearchBtn');
+  
+  if (submoltSearchInput) {
+    submoltSearchInput.addEventListener('input', (e) => {
+      const query = e.target.value.trim().toLowerCase();
+      filterSubmolts(query);
+      
+      // Show/hide clear button
+      if (clearSubmoltSearchBtn) {
+        clearSubmoltSearchBtn.style.display = query ? 'block' : 'none';
+      }
+    });
+  }
+  
+  if (clearSubmoltSearchBtn) {
+    clearSubmoltSearchBtn.addEventListener('click', () => {
+      if (submoltSearchInput) {
+        submoltSearchInput.value = '';
+        filterSubmolts('');
+        clearSubmoltSearchBtn.style.display = 'none';
+      }
+    });
+  }
+  
+  // AI Activity page buttons
+  const refreshAIActivityBtn = document.getElementById('refreshAIActivityBtn');
+  if (refreshAIActivityBtn) {
+    refreshAIActivityBtn.addEventListener('click', async () => {
+      await loadAIActivity();
+    });
+  }
+  
+  const clearAIHistoryBtn = document.getElementById('clearAIHistoryBtn');
+  if (clearAIHistoryBtn) {
+    clearAIHistoryBtn.addEventListener('click', async () => {
+      if (confirm('Are you sure you want to clear all AI activity history? This cannot be undone.')) {
+        const result = await window.electronAPI.clearAIReplies();
+        if (result.success) {
+          showNotification('✅ AI activity history cleared', 'success');
+          await loadAIActivity();
+        } else {
+          showNotification('❌ Failed to clear history', 'error');
+        }
+      }
+    });
+  }
+}
+
+// My Submolts Management
+async function loadMySubmolts() {
+  try {
+    console.log('[MySubmolts] Loading all submolts...');
+    
+    const container = document.getElementById('mySubmoltsContainer');
+    if (!container) {
+      console.error('[MySubmolts] Container not found');
+      return;
+    }
+    
+    container.innerHTML = '<p class="loading">Loading submolts...</p>';
+    
+    // Get all submolts
+    const result = await window.electronAPI.getSubmolts();
+    
+    if (!result.success || !result.submolts) {
+      container.innerHTML = '<p class="empty-state error">❌ Failed to load submolts</p>';
+      return;
+    }
+    
+    const allSubmolts = result.submolts;
+    console.log('[MySubmolts] Loaded', allSubmolts.length, 'submolts');
+    
+    // Get subscription states from localStorage (overrides API data)
+    const subscriptionStates = JSON.parse(localStorage.getItem('submoltSubscriptions') || '{}');
+    console.log('[MySubmolts] Subscription states from localStorage:', subscriptionStates);
+    
+    // Get monitored submolts from AI config
+    const config = await window.electronAPI.getConfig();
+    const monitoredSubmolts = config.aiAgent?.monitorSubmolts 
+      ? config.aiAgent.monitorSubmolts.split(',').map(s => s.trim()).filter(s => s)
+      : [];
+    
+    console.log('[MySubmolts] Monitored submolts from config:', monitoredSubmolts);
+    
+    if (allSubmolts.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div style="font-size: 48px; margin-bottom: 16px;">🦞</div>
+          <h3>No Submolts Available</h3>
+          <p>No submolts found on Moltbook.</p>
+          <button class="btn btn-primary" onclick="showCreateSubmoltDialog()" style="margin-top: 16px;">
+            ➕ Create Your First Submolt
+          </button>
+        </div>
+      `;
+      return;
+    }
+    
+    // Override API subscription data with localStorage data
+    allSubmolts.forEach(submolt => {
+      if (subscriptionStates.hasOwnProperty(submolt.name)) {
+        submolt.is_subscribed = subscriptionStates[submolt.name];
+        console.log('[MySubmolts] Override subscription for', submolt.name, ':', submolt.is_subscribed);
+      }
+    });
+    
+    // Sort: subscribed first, then by subscriber count
+    allSubmolts.sort((a, b) => {
+      if (a.is_subscribed && !b.is_subscribed) return -1;
+      if (!a.is_subscribed && b.is_subscribed) return 1;
+      return (b.subscriber_count || 0) - (a.subscriber_count || 0);
+    });
+    
+    // Render submolt cards
+    container.innerHTML = allSubmolts.map(submolt => {
+      const isMonitored = monitoredSubmolts.includes(submolt.name);
+      
+      return `
+      <div class="post-card" style="margin-bottom: 16px;">
+        <div class="post-header">
+          <h4 style="margin: 0;">m/${submolt.name}</h4>
+          <div style="display: flex; gap: 8px;">
+            ${submolt.your_role === 'owner' ? '<span class="post-badge owner">👑 Owner</span>' : ''}
+            ${submolt.your_role === 'moderator' ? '<span class="post-badge moderator">🛡️ Moderator</span>' : ''}
+            ${submolt.is_subscribed ? '<span class="post-badge success">✓ Subscribed</span>' : ''}
+            ${isMonitored ? '<span class="post-badge info">🤖 Monitored</span>' : ''}
+          </div>
+        </div>
+        
+        <div class="post-body" style="margin: 12px 0;">
+          <div style="font-weight: 600; margin-bottom: 8px;">${submolt.display_name || submolt.name}</div>
+          <div style="color: var(--text-secondary); font-size: 14px;">
+            ${submolt.description || 'No description'}
+          </div>
+        </div>
+        
+        <div class="post-stats">
+          <span>👥 ${submolt.subscriber_count || 0} subscribers</span>
+          <span>📝 ${submolt.post_count || 0} posts</span>
+        </div>
+        
+        <div class="post-actions">
+          <button class="btn btn-sm ${submolt.is_subscribed ? 'btn-secondary' : 'btn-success'} subscribe-submolt-btn" 
+                  data-submolt="${submolt.name}" 
+                  data-subscribed="${submolt.is_subscribed || false}">
+            ${submolt.is_subscribed ? '✓ Subscribed' : '+ Subscribe'}
+          </button>
+          ${submolt.your_role === 'owner' || submolt.your_role === 'moderator' ? `
+          <button class="btn btn-sm btn-primary" onclick="manageSubmoltFromList('${submolt.name}')">
+            ⚙️ Manage
+          </button>
+          ` : ''}
+          <button class="btn btn-sm btn-secondary" onclick="viewSubmoltOnMoltbook('${submolt.name}')">
+            🔗 View
+          </button>
+        </div>
+      </div>
+    `}).join('');
+    
+    // Setup subscribe buttons
+    setupSubmoltSubscribeButtons();
+    
+  } catch (error) {
+    console.error('[MySubmolts] Failed to load:', error);
+    const container = document.getElementById('mySubmoltsContainer');
+    if (container) {
+      container.innerHTML = '<p class="empty-state error">❌ Error loading submolts</p>';
+    }
+  }
+}
+
+// Manage submolt from list
+window.manageSubmoltFromList = async function(submoltName) {
+  await showManageSubmoltDialog(submoltName);
+};
+
+// View submolt on Moltbook
+window.viewSubmoltOnMoltbook = function(submoltName) {
+  const url = `https://www.moltbook.com/m/${submoltName}`;
+  window.electronAPI.openExternal(url);
+};
+
+// Filter submolts in Browse Submolts page
+function filterSubmolts(query) {
+  const container = document.getElementById('mySubmoltsContainer');
+  const statsDiv = document.getElementById('submoltSearchStats');
+  
+  if (!container) return;
+  
+  const cards = container.querySelectorAll('.post-card');
+  let visibleCount = 0;
+  let totalCount = cards.length;
+  
+  if (!query) {
+    // Show all cards
+    cards.forEach(card => {
+      card.style.display = '';
+    });
+    if (statsDiv) statsDiv.style.display = 'none';
+    return;
+  }
+  
+  const searchTerm = query.toLowerCase();
+  
+  cards.forEach(card => {
+    // Get submolt name from header
+    const nameElement = card.querySelector('.post-header h4');
+    const name = nameElement ? nameElement.textContent.toLowerCase() : '';
+    
+    // Get description from body
+    const descElement = card.querySelector('.post-body > div:last-child');
+    const description = descElement ? descElement.textContent.toLowerCase() : '';
+    
+    // Check if matches
+    const matches = name.includes(searchTerm) || description.includes(searchTerm);
+    
+    if (matches) {
+      card.style.display = '';
+      visibleCount++;
+    } else {
+      card.style.display = 'none';
+    }
+  });
+  
+  // Show search stats
+  if (statsDiv) {
+    if (visibleCount === 0) {
+      statsDiv.innerHTML = `❌ No submolts found matching "${query}"`;
+      statsDiv.style.color = 'var(--error)';
+    } else if (visibleCount === totalCount) {
+      statsDiv.style.display = 'none';
+    } else {
+      statsDiv.innerHTML = `🔍 Found ${visibleCount} of ${totalCount} submolts`;
+      statsDiv.style.color = 'var(--text-secondary)';
+    }
+    statsDiv.style.display = 'block';
+  }
+  
+  console.log('[Search] Query:', query, '| Visible:', visibleCount, '/', totalCount);
+}
+
+// Setup subscribe buttons for submolts
+function setupSubmoltSubscribeButtons() {
+  document.querySelectorAll('.subscribe-submolt-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const submoltName = this.dataset.submolt;
+      const isSubscribed = this.dataset.subscribed === 'true';
+      
+      this.disabled = true;
+      this.textContent = isSubscribed ? '⏳ Unsubscribing...' : '⏳ Subscribing...';
+      
+      try {
+        const result = isSubscribed
+          ? await window.electronAPI.unsubscribeSubmolt({ submoltName })
+          : await window.electronAPI.subscribeSubmolt({ submoltName });
+        
+        if (result.success) {
+          const newState = !isSubscribed;
+          
+          // Save subscription state to localStorage
+          const subscriptionStates = JSON.parse(localStorage.getItem('submoltSubscriptions') || '{}');
+          subscriptionStates[submoltName] = newState;
+          localStorage.setItem('submoltSubscriptions', JSON.stringify(subscriptionStates));
+          console.log('[Subscribe] Saved state to localStorage:', submoltName, '=', newState);
+          
+          // Update button
+          this.dataset.subscribed = newState;
+          this.textContent = newState ? '✓ Subscribed' : '+ Subscribe';
+          this.classList.toggle('btn-success', !newState);
+          this.classList.toggle('btn-secondary', newState);
+          
+          // Update badge in card header
+          const card = this.closest('.post-card');
+          const header = card.querySelector('.post-header > div');
+          const subscribedBadge = header.querySelector('.post-badge.success');
+          
+          if (newState && !subscribedBadge) {
+            // Add subscribed badge
+            const badge = document.createElement('span');
+            badge.className = 'post-badge success';
+            badge.textContent = '✓ Subscribed';
+            header.appendChild(badge);
+          } else if (!newState && subscribedBadge) {
+            // Remove subscribed badge
+            subscribedBadge.remove();
+          }
+          
+          // Sync with AI Agent monitored submolts
+          await syncMonitoredSubmolts(submoltName, newState);
+          
+          showNotification(newState ? '✅ Subscribed!' : '✅ Unsubscribed', 'success');
+        } else {
+          showNotification(`❌ ${result.error}`, 'error');
+          this.textContent = isSubscribed ? '✓ Subscribed' : '+ Subscribe';
+        }
+      } catch (error) {
+        console.error('[Subscribe] Error:', error);
+        showNotification('❌ Operation failed', 'error');
+        this.textContent = isSubscribed ? '✓ Subscribed' : '+ Subscribe';
+      } finally {
+        this.disabled = false;
+      }
+    });
+  });
+}
+
+// Sync monitored submolts with subscriptions
+async function syncMonitoredSubmolts(submoltName, isSubscribed) {
+  try {
+    const config = await window.electronAPI.getConfig();
+    const currentMonitored = config.aiAgent?.monitorSubmolts 
+      ? config.aiAgent.monitorSubmolts.split(',').map(s => s.trim()).filter(s => s)
+      : [];
+    
+    let updatedMonitored = [...currentMonitored];
+    
+    if (isSubscribed && !currentMonitored.includes(submoltName)) {
+      // Add to monitored list
+      updatedMonitored.push(submoltName);
+      console.log('[Sync] Added', submoltName, 'to monitored submolts');
+    } else if (!isSubscribed && currentMonitored.includes(submoltName)) {
+      // Remove from monitored list
+      updatedMonitored = updatedMonitored.filter(s => s !== submoltName);
+      console.log('[Sync] Removed', submoltName, 'from monitored submolts');
+    }
+    
+    // Save updated config
+    const newConfig = {
+      ...config,
+      aiAgent: {
+        ...config.aiAgent,
+        monitorSubmolts: updatedMonitored.join(', ')
+      }
+    };
+    
+    await window.electronAPI.saveConfig(newConfig);
+    console.log('[Sync] ✅ Monitored submolts synced:', updatedMonitored.join(', '));
+    
+    // Update monitored badge in UI
+    const card = document.querySelector(`[data-submolt="${submoltName}"]`).closest('.post-card');
+    const header = card.querySelector('.post-header > div');
+    const monitoredBadge = header.querySelector('.post-badge.info');
+    
+    if (isSubscribed && !monitoredBadge) {
+      const badge = document.createElement('span');
+      badge.className = 'post-badge info';
+      badge.textContent = '🤖 Monitored';
+      header.appendChild(badge);
+    } else if (!isSubscribed && monitoredBadge) {
+      monitoredBadge.remove();
+    }
+  } catch (error) {
+    console.error('[Sync] Failed to sync monitored submolts:', error);
+  }
+}
+
+// AI Activity Management
+async function loadAIActivity() {
+  try {
+    console.log('[AIActivity] Loading AI activity...');
+    
+    const container = document.getElementById('aiActivityContainer');
+    if (!container) {
+      console.error('[AIActivity] Container not found');
+      return;
+    }
+    
+    container.innerHTML = '<p class="loading">Loading AI activity...</p>';
+    
+    // Get AI replies from backend
+    const result = await window.electronAPI.getAIReplies();
+    
+    if (!result.success) {
+      container.innerHTML = '<p class="empty-state error">❌ Failed to load AI activity</p>';
+      return;
+    }
+    
+    const { replies, repliesToday, repliesThisHour } = result;
+    
+    // Update stats
+    document.getElementById('aiRepliesToday').textContent = repliesToday || 0;
+    document.getElementById('aiRepliesThisHour').textContent = repliesThisHour || 0;
+    document.getElementById('aiTotalReplies').textContent = replies.length || 0;
+    
+    console.log('[AIActivity] Loaded', replies.length, 'AI replies');
+    
+    if (!replies || replies.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div style="font-size: 48px; margin-bottom: 16px;">🤖💬</div>
+          <h3>No AI Activity Yet</h3>
+          <p>Your AI agent hasn't posted any automatic replies yet.</p>
+          <p style="color: var(--text-secondary); font-size: 14px; margin-top: 8px;">
+            Make sure your AI agent is running and configured properly.
+          </p>
+        </div>
+      `;
+      return;
+    }
+    
+    // Get vote states from localStorage
+    const voteStates = JSON.parse(localStorage.getItem('postVoteStates') || '{}');
+    
+    // Render AI reply cards
+    container.innerHTML = replies.map(reply => {
+      const timestamp = new Date(reply.timestamp);
+      const timeAgo = getTimeAgo(timestamp);
+      
+      // Prepare post body preview (first 150 chars)
+      const postBody = reply.postBody || '';
+      const postPreview = postBody.length > 150 ? postBody.substring(0, 150) + '...' : postBody;
+      
+      // Prepare reply preview (first 200 chars)
+      const replyPreview = reply.reply.length > 200 ? reply.reply.substring(0, 200) + '...' : reply.reply;
+      
+      // Check vote state
+      const voteState = voteStates[reply.postId] || null; // 'upvote', 'downvote', or null
+      
+      return `
+        <div class="post-card ai-reply-card" data-reply-id="${reply.id}" data-post-id="${reply.postId}">
+          <div class="post-header">
+            <div style="flex: 1;">
+              <h4 style="margin: 0 0 4px 0;" data-original="${escapeHtml(reply.postTitle)}">
+                <a href="#" onclick="window.electronAPI.openExternal('https://www.moltbook.com/post/${reply.postId}'); return false;" 
+                   style="color: var(--accent); text-decoration: none;">
+                  ${escapeHtml(reply.postTitle)}
+                </a>
+              </h4>
+              <div style="font-size: 12px; color: var(--text-secondary);">
+                Replied to @${reply.postAuthor} in m/${reply.submolt || 'general'}
+              </div>
+            </div>
+            <span class="post-badge success">✅ Posted</span>
+          </div>
+          
+          ${postBody ? `
+          <div class="ai-context-section">
+            <div class="ai-context-label">📄 Original Post:</div>
+            <div class="ai-context-text" data-original="${escapeHtml(postBody)}" data-full="${escapeHtml(postBody).replace(/\n/g, '\\n')}">
+              ${escapeHtml(postPreview)}
+            </div>
+            ${postBody.length > 150 ? `
+            <button class="btn btn-xs btn-link expand-context-btn" data-reply-id="${reply.id}">
+              📖 Read More
+            </button>
+            ` : ''}
+          </div>
+          ` : ''}
+          
+          <div class="ai-reply-section">
+            <div class="ai-reply-label">🤖 AI Reply:</div>
+            <div class="ai-reply-text" data-original="${escapeHtml(reply.reply)}" data-full="${escapeHtml(reply.reply).replace(/\n/g, '\\n')}">
+              ${escapeHtml(replyPreview)}
+            </div>
+            ${reply.reply.length > 200 ? `
+            <button class="btn btn-xs btn-link expand-reply-btn" data-reply-id="${reply.id}">
+              📖 Read More
+            </button>
+            ` : ''}
+          </div>
+          
+          <div class="post-stats">
+            <span>🕐 ${timeAgo}</span>
+            <span>📏 ${reply.reply.length} chars</span>
+            ${postBody ? `<span>📄 Post: ${postBody.length} chars</span>` : ''}
+          </div>
+          
+          <div class="post-actions">
+            <button class="btn btn-sm ${voteState === 'upvote' ? 'btn-primary voted' : 'btn-success'} upvote-ai-post-btn" 
+                    data-post-id="${reply.postId}"
+                    ${voteState === 'upvote' ? 'disabled' : ''}>
+              ${voteState === 'upvote' ? '✓ Upvoted' : '👍 Upvote'}
+            </button>
+            <button class="btn btn-sm ${voteState === 'downvote' ? 'btn-danger voted' : 'btn-secondary'} downvote-ai-post-btn" 
+                    data-post-id="${reply.postId}"
+                    ${voteState === 'downvote' ? 'disabled' : ''}>
+              ${voteState === 'downvote' ? '✓ Downvoted' : '👎 Downvote'}
+            </button>
+            <button class="btn btn-sm btn-secondary translate-ai-reply-btn" data-reply-id="${reply.id}">
+              🌐 Çevir
+            </button>
+            <button class="btn btn-sm btn-primary" onclick="window.electronAPI.openExternal('https://www.moltbook.com/post/${reply.postId}'); return false;">
+              🔗 View Post
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    // Setup translate buttons
+    setupAIReplyTranslateButtons();
+    
+    // Setup expand/collapse buttons
+    setupAIReplyExpandButtons();
+    
+    // Setup voting buttons
+    setupAIReplyVotingButtons();
+    
+  } catch (error) {
+    console.error('[AIActivity] Failed to load:', error);
+    const container = document.getElementById('aiActivityContainer');
+    if (container) {
+      container.innerHTML = '<p class="empty-state error">❌ Error loading AI activity</p>';
+    }
+  }
+}
+
+// Setup translate buttons for AI replies
+function setupAIReplyTranslateButtons() {
+  const translateButtons = document.querySelectorAll('.translate-ai-reply-btn');
+  
+  translateButtons.forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const replyId = this.dataset.replyId;
+      
+      // Use LanguageManager for translation (same as Posts page)
+      if (window.languageManager) {
+        await window.languageManager.translateAIReply(replyId);
+      } else {
+        showNotification('❌ Translation system not available', 'error');
+      }
+    });
+  });
+}
+
+// Setup expand/collapse buttons for AI replies
+function setupAIReplyExpandButtons() {
+  // Expand context (original post)
+  document.querySelectorAll('.expand-context-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const replyId = this.dataset.replyId;
+      const card = document.querySelector(`[data-reply-id="${replyId}"]`);
+      const contextText = card.querySelector('.ai-context-text');
+      
+      if (contextText.classList.contains('expanded')) {
+        // Collapse
+        const preview = contextText.getAttribute('data-original').substring(0, 150) + '...';
+        contextText.textContent = preview;
+        contextText.classList.remove('expanded');
+        this.textContent = '📖 Read More';
+      } else {
+        // Expand
+        const fullText = contextText.getAttribute('data-full').replace(/\\n/g, '\n');
+        contextText.textContent = fullText;
+        contextText.classList.add('expanded');
+        this.textContent = '📕 Close';
+      }
+    });
+  });
+  
+  // Expand reply
+  document.querySelectorAll('.expand-reply-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const replyId = this.dataset.replyId;
+      const card = document.querySelector(`[data-reply-id="${replyId}"]`);
+      const replyText = card.querySelector('.ai-reply-text');
+      
+      if (replyText.classList.contains('expanded')) {
+        // Collapse
+        const preview = replyText.getAttribute('data-original').substring(0, 200) + '...';
+        replyText.textContent = preview;
+        replyText.classList.remove('expanded');
+        this.textContent = '📖 Read More';
+      } else {
+        // Expand
+        const fullText = replyText.getAttribute('data-full').replace(/\\n/g, '\n');
+        replyText.textContent = fullText;
+        replyText.classList.add('expanded');
+        this.textContent = '📕 Close';
+      }
+    });
+  });
+}
+
+// Setup voting buttons for AI replies
+function setupAIReplyVotingButtons() {
+  // Upvote post
+  document.querySelectorAll('.upvote-ai-post-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const postId = this.dataset.postId;
+      this.disabled = true;
+      this.textContent = '⏳ Upvoting...';
+      
+      try {
+        const result = await window.electronAPI.upvotePost({ postId });
+        
+        if (result.success) {
+          // Save vote state to localStorage
+          const voteStates = JSON.parse(localStorage.getItem('postVoteStates') || '{}');
+          voteStates[postId] = 'upvote';
+          localStorage.setItem('postVoteStates', JSON.stringify(voteStates));
+          
+          showNotification('✅ Upvoted!', 'success');
+          this.textContent = '✓ Upvoted';
+          this.classList.add('voted');
+          this.classList.remove('btn-success');
+          this.classList.add('btn-primary');
+          
+          // Disable downvote button if exists
+          const card = this.closest('.post-card');
+          const downvoteBtn = card.querySelector('.downvote-ai-post-btn');
+          if (downvoteBtn) {
+            downvoteBtn.disabled = false;
+            downvoteBtn.textContent = '👎 Downvote';
+            downvoteBtn.classList.remove('voted', 'btn-danger');
+            downvoteBtn.classList.add('btn-secondary');
+          }
+        } else {
+          showNotification(`❌ ${result.error}`, 'error');
+          this.textContent = '👍 Upvote';
+          this.disabled = false;
+        }
+      } catch (error) {
+        console.error('[Vote] Error:', error);
+        showNotification('❌ Upvote failed', 'error');
+        this.textContent = '👍 Upvote';
+        this.disabled = false;
+      }
+    });
+  });
+  
+  // Downvote post
+  document.querySelectorAll('.downvote-ai-post-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const postId = this.dataset.postId;
+      this.disabled = true;
+      this.textContent = '⏳ Downvoting...';
+      
+      try {
+        const result = await window.electronAPI.downvotePost({ postId });
+        
+        if (result.success) {
+          // Save vote state to localStorage
+          const voteStates = JSON.parse(localStorage.getItem('postVoteStates') || '{}');
+          voteStates[postId] = 'downvote';
+          localStorage.setItem('postVoteStates', JSON.stringify(voteStates));
+          
+          showNotification('✅ Downvoted', 'success');
+          this.textContent = '✓ Downvoted';
+          this.classList.add('voted');
+          this.classList.remove('btn-secondary');
+          this.classList.add('btn-danger');
+          
+          // Disable upvote button if exists
+          const card = this.closest('.post-card');
+          const upvoteBtn = card.querySelector('.upvote-ai-post-btn');
+          if (upvoteBtn) {
+            upvoteBtn.disabled = false;
+            upvoteBtn.textContent = '👍 Upvote';
+            upvoteBtn.classList.remove('voted', 'btn-primary');
+            upvoteBtn.classList.add('btn-success');
+          }
+        } else {
+          showNotification(`❌ ${result.error}`, 'error');
+          this.textContent = '👎 Downvote';
+          this.disabled = false;
+        }
+      } catch (error) {
+        console.error('[Vote] Error:', error);
+        showNotification('❌ Downvote failed', 'error');
+        this.textContent = '👎 Downvote';
+        this.disabled = false;
+      }
+    });
+  });
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Helper function to get time ago
+function getTimeAgo(date) {
+  const seconds = Math.floor((new Date() - date) / 1000);
+  
+  if (seconds < 60) return 'Just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+  return date.toLocaleDateString();
 }
 
 // Helper functions
@@ -1480,8 +2232,20 @@ async function loadSubmolts() {
     if (result.success && result.submolts) {
       // Check if submolts is an array
       if (Array.isArray(result.submolts)) {
-        // FILTER: Show submolts with 5+ subscribers (more inclusive)
-        const activeSubmolts = result.submolts.filter(s => s.subscriber_count >= 5);
+        // Get current agent info to check owned submolts
+        const agentResult = await window.electronAPI.getAgent();
+        const currentAgentName = agentResult?.agent?.name;
+        
+        // FILTER: Show submolts with 5+ subscribers OR owned by current agent
+        const activeSubmolts = result.submolts.filter(s => {
+          // Always show if user is owner or moderator
+          if (s.your_role === 'owner' || s.your_role === 'moderator') {
+            console.log('[Submolts] Including owned/moderated submolt:', s.name);
+            return true;
+          }
+          // Otherwise require 5+ subscribers
+          return s.subscriber_count >= 5;
+        });
         
         // Add essential submolts if missing
         const essentialSubmolts = [
@@ -1508,7 +2272,7 @@ async function loadSubmolts() {
         
         submoltsCache = activeSubmolts;
         submoltsLastFetch = Date.now(); // Update cache timestamp
-        console.log('[Submolts] ✅ Loaded', submoltsCache.length, 'active submolts (5+ subscribers)');
+        console.log('[Submolts] ✅ Loaded', submoltsCache.length, 'active submolts (5+ subscribers or owned)');
         populateSubmoltDropdown();
       } else {
         console.error('[Submolts] ❌ submolts is not an array:', typeof result.submolts);
@@ -1633,7 +2397,7 @@ function populateSubmoltDropdown() {
   }
 }
 
-function filterSubmolts(searchTerm) {
+function filterSubmoltDropdown(searchTerm) {
   const select = document.getElementById('submolt');
   if (!select) return;
   
@@ -1765,6 +2529,27 @@ window.submitCreateSubmolt = async function() {
 
 async function createSubmolt(name, displayName, description) {
   try {
+    console.log('[INFO] Creating submolt...');
+    console.log('[INFO] Name:', name);
+    console.log('[INFO] Display Name:', displayName);
+    console.log('[INFO] Description:', description);
+    
+    // Check if agent is registered
+    const agentStatus = await window.electronAPI.getAgentStatus();
+    console.log('[INFO] Agent status:', agentStatus);
+    
+    if (!agentStatus || !agentStatus.agent) {
+      showNotification('❌ No agent registered. Please register first in Settings.', 'error');
+      console.error('[ERROR] No agent registered');
+      return;
+    }
+    
+    if (agentStatus.status !== 'claimed') {
+      showNotification('❌ Agent not claimed yet. Please claim your agent first.', 'error');
+      console.error('[ERROR] Agent not claimed:', agentStatus.status);
+      return;
+    }
+    
     showNotification('Creating submolt...', 'info');
     
     const result = await window.electronAPI.createSubmolt({
@@ -1773,8 +2558,14 @@ async function createSubmolt(name, displayName, description) {
       description
     });
     
+    console.log('[INFO] Create submolt result:', result);
+    
     if (result.success) {
       showNotification(`✅ Submolt "m/${name}" created successfully!`, 'success');
+      
+      // CRITICAL: Clear cache before reloading
+      submoltsCache = null;
+      submoltsLastFetch = 0;
       
       // Reload submolts to include the new one
       await loadSubmolts();
@@ -1785,12 +2576,296 @@ async function createSubmolt(name, displayName, description) {
         select.value = name;
       }
     } else {
-      showNotification(`❌ Failed to create submolt: ${result.error}`, 'error');
+      const errorMsg = result.error || 'Unknown error';
+      showNotification(`❌ Failed to create submolt: ${errorMsg}`, 'error');
+      console.error('[ERROR] Failed to create submolt:', errorMsg);
     }
   } catch (error) {
     showNotification(`❌ Error: ${error.message}`, 'error');
+    console.error('[ERROR] Exception creating submolt:', error);
   }
 }
+
+// Manage Submolt Dialog
+async function showManageSubmoltDialog(submoltName) {
+  try {
+    showNotification('Loading submolt info...', 'info');
+    
+    // Get submolt info
+    const result = await window.electronAPI.getSubmoltInfo(submoltName);
+    
+    if (!result.success) {
+      showNotification('❌ Failed to load submolt: ' + result.error, 'error');
+      return;
+    }
+    
+    const submolt = result.submolt;
+    const isOwner = submolt.your_role === 'owner';
+    const isModerator = submolt.your_role === 'moderator' || isOwner;
+    
+    if (!isModerator) {
+      showNotification('❌ You must be a moderator or owner to manage this submolt', 'error');
+      return;
+    }
+    
+    // Create modal dialog
+    const dialog = document.createElement('div');
+    dialog.className = 'modal-overlay';
+    dialog.innerHTML = `
+      <div class="modal-dialog" style="max-width: 600px;">
+        <div class="modal-header">
+          <h3>⚙️ Manage m/${submoltName}</h3>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        </div>
+        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+          
+          <div style="margin-bottom: 20px; padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+            <div style="font-weight: 600; margin-bottom: 4px;">Your Role: ${submolt.your_role === 'owner' ? '👑 Owner' : '🛡️ Moderator'}</div>
+            <div style="font-size: 13px; color: var(--text-tertiary);">
+              ${isOwner ? 'You have full control over this submolt' : 'You can moderate content but cannot change settings'}
+            </div>
+          </div>
+          
+          ${isOwner ? `
+          <div class="form-group">
+            <label>Description</label>
+            <textarea id="submoltDescription" class="form-control" rows="3" placeholder="A place for...">${submolt.description || ''}</textarea>
+          </div>
+          
+          <div class="form-group">
+            <label>Banner Color</label>
+            <input type="color" id="submoltBannerColor" class="form-control" value="${submolt.banner_color || '#1a1a2e'}" style="height: 40px;">
+          </div>
+          
+          <div class="form-group">
+            <label>Theme Color</label>
+            <input type="color" id="submoltThemeColor" class="form-control" value="${submolt.theme_color || '#ff4500'}" style="height: 40px;">
+          </div>
+          
+          <div class="form-group">
+            <label>Avatar Image</label>
+            <small style="display: block; margin-bottom: 8px; color: var(--text-tertiary);">Max size: 500 KB</small>
+            <input type="file" id="submoltAvatar" accept="image/png,image/jpeg" class="form-control">
+          </div>
+          
+          <div class="form-group">
+            <label>Banner Image</label>
+            <small style="display: block; margin-bottom: 8px; color: var(--text-tertiary);">Max size: 2 MB</small>
+            <input type="file" id="submoltBanner" accept="image/jpeg,image/png" class="form-control">
+          </div>
+          
+          <button class="btn btn-primary" onclick="updateSubmoltSettings('${submoltName}')" style="width: 100%; margin-bottom: 20px;">
+            💾 Save Settings
+          </button>
+          
+          <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--border-color);">
+          
+          <div class="form-group">
+            <label>Add Moderator</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="newModeratorName" class="form-control" placeholder="Agent username" style="flex: 1;">
+              <button class="btn btn-secondary" onclick="addSubmoltModerator('${submoltName}')">Add</button>
+            </div>
+          </div>
+          
+          <div id="moderatorsList" style="margin-top: 12px;">
+            <div style="font-size: 13px; color: var(--text-tertiary);">Loading moderators...</div>
+          </div>
+          ` : `
+          <div style="padding: 20px; text-align: center; color: var(--text-tertiary);">
+            <div style="font-size: 48px; margin-bottom: 12px;">🛡️</div>
+            <div>As a moderator, you can pin/unpin posts but cannot change submolt settings.</div>
+            <div style="margin-top: 12px;">Only the owner can modify settings and manage moderators.</div>
+          </div>
+          `}
+          
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Close</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(dialog);
+    
+    // Load moderators list if owner
+    if (isOwner) {
+      loadSubmoltModerators(submoltName);
+    }
+    
+  } catch (error) {
+    console.error('[Submolt] Error showing manage dialog:', error);
+    showNotification('❌ Error: ' + error.message, 'error');
+  }
+}
+
+window.updateSubmoltSettings = async function(submoltName) {
+  try {
+    const description = document.getElementById('submoltDescription').value.trim();
+    const bannerColor = document.getElementById('submoltBannerColor').value;
+    const themeColor = document.getElementById('submoltThemeColor').value;
+    const avatarFile = document.getElementById('submoltAvatar').files[0];
+    const bannerFile = document.getElementById('submoltBanner').files[0];
+    
+    showNotification('Updating submolt settings...', 'info');
+    
+    // Update text settings
+    const result = await window.electronAPI.updateSubmoltSettings({
+      submoltName,
+      description,
+      bannerColor,
+      themeColor
+    });
+    
+    if (!result.success) {
+      showNotification('❌ Failed to update settings: ' + result.error, 'error');
+      return;
+    }
+    
+    // Upload avatar if selected
+    if (avatarFile) {
+      if (avatarFile.size > 500 * 1024) {
+        showNotification('❌ Avatar file too large (max 500 KB)', 'error');
+        return;
+      }
+      
+      showNotification('Uploading avatar...', 'info');
+      const avatarResult = await window.electronAPI.uploadSubmoltImage({
+        submoltName,
+        filePath: avatarFile.path,
+        type: 'avatar'
+      });
+      
+      if (!avatarResult.success) {
+        showNotification('❌ Failed to upload avatar: ' + avatarResult.error, 'error');
+        return;
+      }
+    }
+    
+    // Upload banner if selected
+    if (bannerFile) {
+      if (bannerFile.size > 2 * 1024 * 1024) {
+        showNotification('❌ Banner file too large (max 2 MB)', 'error');
+        return;
+      }
+      
+      showNotification('Uploading banner...', 'info');
+      const bannerResult = await window.electronAPI.uploadSubmoltImage({
+        submoltName,
+        filePath: bannerFile.path,
+        type: 'banner'
+      });
+      
+      if (!bannerResult.success) {
+        showNotification('❌ Failed to upload banner: ' + bannerResult.error, 'error');
+        return;
+      }
+    }
+    
+    showNotification('✅ Submolt settings updated successfully!', 'success');
+    
+    // Close dialog
+    document.querySelector('.modal-overlay').remove();
+    
+  } catch (error) {
+    console.error('[Submolt] Error updating settings:', error);
+    showNotification('❌ Error: ' + error.message, 'error');
+  }
+};
+
+async function loadSubmoltModerators(submoltName) {
+  try {
+    const result = await window.electronAPI.listModerators(submoltName);
+    
+    const container = document.getElementById('moderatorsList');
+    if (!container) return;
+    
+    if (!result.success) {
+      container.innerHTML = `<div style="color: var(--error-color);">Failed to load moderators</div>`;
+      return;
+    }
+    
+    const moderators = result.moderators || [];
+    
+    if (moderators.length === 0) {
+      container.innerHTML = `<div style="font-size: 13px; color: var(--text-tertiary);">No moderators yet</div>`;
+      return;
+    }
+    
+    container.innerHTML = moderators.map(mod => `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 8px;">
+        <div>
+          <div style="font-weight: 500;">@${mod.agent_name}</div>
+          <div style="font-size: 12px; color: var(--text-tertiary);">${mod.role === 'owner' ? '👑 Owner' : '🛡️ Moderator'}</div>
+        </div>
+        ${mod.role !== 'owner' ? `
+          <button class="btn btn-xs btn-danger" onclick="removeSubmoltModerator('${submoltName}', '${mod.agent_name}')">Remove</button>
+        ` : ''}
+      </div>
+    `).join('');
+    
+  } catch (error) {
+    console.error('[Submolt] Error loading moderators:', error);
+  }
+}
+
+window.addSubmoltModerator = async function(submoltName) {
+  try {
+    const input = document.getElementById('newModeratorName');
+    const agentName = input.value.trim();
+    
+    if (!agentName) {
+      showNotification('❌ Please enter an agent username', 'error');
+      return;
+    }
+    
+    showNotification('Adding moderator...', 'info');
+    
+    const result = await window.electronAPI.addModerator({
+      submoltName,
+      agentName,
+      role: 'moderator'
+    });
+    
+    if (result.success) {
+      showNotification('✅ Moderator added successfully!', 'success');
+      input.value = '';
+      await loadSubmoltModerators(submoltName);
+    } else {
+      showNotification('❌ Failed to add moderator: ' + result.error, 'error');
+    }
+    
+  } catch (error) {
+    console.error('[Submolt] Error adding moderator:', error);
+    showNotification('❌ Error: ' + error.message, 'error');
+  }
+};
+
+window.removeSubmoltModerator = async function(submoltName, agentName) {
+  try {
+    if (!confirm(`Remove @${agentName} as moderator?`)) {
+      return;
+    }
+    
+    showNotification('Removing moderator...', 'info');
+    
+    const result = await window.electronAPI.removeModerator({
+      submoltName,
+      agentName
+    });
+    
+    if (result.success) {
+      showNotification('✅ Moderator removed successfully!', 'success');
+      await loadSubmoltModerators(submoltName);
+    } else {
+      showNotification('❌ Failed to remove moderator: ' + result.error, 'error');
+    }
+    
+  } catch (error) {
+    console.error('[Submolt] Error removing moderator:', error);
+    showNotification('❌ Error: ' + error.message, 'error');
+  }
+};
 
 async function loadDrafts() {
   try {
@@ -2427,7 +3502,16 @@ async function loadPostComments(postId) {
     }
 
     console.log('[App] Rendering', result.comments.length, 'comments');
-    commentsDiv.innerHTML = result.comments.map(comment => {
+    
+    // CRITICAL: Limit initial render to 10 comments to prevent memory issues
+    const INITIAL_COMMENT_LIMIT = 10;
+    const totalComments = result.comments.length;
+    const commentsToShow = result.comments.slice(0, INITIAL_COMMENT_LIMIT);
+    const hasMore = totalComments > INITIAL_COMMENT_LIMIT;
+    
+    console.log('[App] Showing', commentsToShow.length, 'of', totalComments, 'comments initially');
+    
+    commentsDiv.innerHTML = commentsToShow.map(comment => {
       // Handle different comment formats
       const author = comment.author?.username || comment.author?.name || comment.author || 
                      comment.user?.username || comment.user?.name || 'Anonymous';
@@ -2451,73 +3535,45 @@ async function loadPostComments(postId) {
         </div>
       `;
     }).join('');
-
-    // Add reply listeners
-    document.querySelectorAll('.reply-to-comment').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const commentId = btn.dataset.id;
-        const postIdFromBtn = btn.dataset.post;
-        const author = btn.dataset.author;
-        
-        // Auto-generate AI reply instead of showing dialog
-        try {
-          showNotification('🤖 AI generating reply...', 'info');
-          
-          // Get the comment text to reply to
-          const commentElement = btn.closest('.comment-item');
-          const commentBody = commentElement ? commentElement.querySelector('.comment-body').textContent : '';
-          
-          // Generate AI reply
-          const aiResult = await window.electronAPI.generateReply({
-            post: {
-              title: `Reply to @${author}`,
-              body: commentBody
-            }
-          });
-          
-          if (!aiResult.success) {
-            showNotification('❌ AI failed to generate reply: ' + aiResult.error, 'error');
-            return;
-          }
-          
-          const aiReply = aiResult.reply;
-          
-          // Add mention if not already present
-          const finalReply = aiReply.startsWith(`@${author}`) ? aiReply : `@${author} ${aiReply}`;
-          
-          showNotification('📤 Posting AI reply...', 'info');
-          
-          const result = await window.electronAPI.replyToComment({ 
-            postId: postIdFromBtn, 
-            commentId, 
-            body: finalReply 
-          });
-          
-          if (result.success) {
-            showNotification('✅ AI reply posted successfully!', 'success');
-            await loadPostComments(postIdFromBtn);
-          } else {
-            showNotification('❌ Failed to post reply: ' + result.error, 'error');
-          }
-        } catch (error) {
-          console.error('[App] ❌ Auto AI reply error:', error);
-          showNotification('❌ Error: ' + error.message, 'error');
-        }
-      });
-    });
     
-    // Add translate comment listeners
-    document.querySelectorAll('.translate-comment-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const commentId = btn.dataset.commentId;
+    // Add "Load More" button if there are more comments
+    if (hasMore) {
+      const loadMoreBtn = document.createElement('button');
+      loadMoreBtn.className = 'btn btn-secondary';
+      loadMoreBtn.style.cssText = 'width: 100%; margin-top: 12px;';
+      loadMoreBtn.textContent = `📄 Load ${totalComments - INITIAL_COMMENT_LIMIT} More Comments`;
+      loadMoreBtn.onclick = () => {
+        // Show all comments
+        commentsDiv.innerHTML = result.comments.map(comment => {
+          const author = comment.author?.username || comment.author?.name || comment.author || 
+                         comment.user?.username || comment.user?.name || 'Anonymous';
+          const body = comment.body || comment.content || comment.text || '';
+          const createdAt = comment.createdAt || comment.created_at || comment.timestamp || new Date().toISOString();
+          const commentId = comment.id || comment._id || '';
+          
+          return `
+            <div class="comment" data-comment-id="${commentId}">
+              <div class="comment-header">
+                <strong>@${author}</strong>
+                <span class="comment-date">${new Date(createdAt).toLocaleString()}</span>
+              </div>
+              <div class="comment-body">${body}</div>
+              <div class="comment-actions">
+                <button class="btn btn-sm btn-secondary reply-to-comment" data-id="${commentId}" data-post="${postId}" data-author="${author}">💬 Reply</button>
+                <button class="btn btn-sm btn-accent translate-comment-btn" data-comment-id="${commentId}">🌐 Çevir</button>
+              </div>
+            </div>
+          `;
+        }).join('');
         
-        if (window.languageManager) {
-          await window.languageManager.translateComment(commentId);
-        } else {
-          showNotification('❌ Translation system not available', 'error');
-        }
-      });
-    });
+        // Re-attach event delegation after loading all comments
+        setupCommentEventListeners(commentsDiv);
+      };
+      commentsDiv.appendChild(loadMoreBtn);
+    }
+
+    // CRITICAL: Use event delegation to prevent memory leaks
+    setupCommentEventListeners(commentsDiv);
   } catch (error) {
     console.error('[App] Failed to load comments:', error);
     const commentsDiv = document.getElementById(`comments-${postId}`);
@@ -2527,6 +3583,82 @@ async function loadPostComments(postId) {
     showNotification('❌ Error loading comments: ' + error.message, 'error');
   }
 }
+
+// Setup event listeners for comments using event delegation
+function setupCommentEventListeners(commentsDiv) {
+  // Remove old listeners by cloning the container
+  const oldContainer = commentsDiv.cloneNode(true);
+  commentsDiv.parentNode.replaceChild(oldContainer, commentsDiv);
+  
+  // Add single delegated event listener for all comment buttons
+  oldContainer.addEventListener('click', async (e) => {
+    const target = e.target;
+    
+    // Handle reply button
+    if (target.classList.contains('reply-to-comment')) {
+      const commentId = target.dataset.id;
+      const postIdFromBtn = target.dataset.post;
+      const commentAuthor = target.dataset.author;
+      
+      try {
+        showNotification('🤖 AI generating reply...', 'info');
+        
+        const commentElement = target.closest('.comment');
+        const commentBody = commentElement ? commentElement.querySelector('.comment-body').textContent : '';
+        
+        const postCard = document.querySelector(`[data-id="${postIdFromBtn}"]`);
+        const postTitle = postCard ? postCard.querySelector('h4').textContent : '';
+        const postBodyElement = postCard ? postCard.querySelector('.post-body') : null;
+        const postBody = postBodyElement ? postBodyElement.dataset.full || postBodyElement.textContent : '';
+        
+        const aiResult = await window.electronAPI.generateReply({
+          post: {
+            title: postTitle,
+            body: `${postBody}\n\n---\n\nComment by @${commentAuthor}:\n${commentBody}\n\nPlease write a thoughtful reply to @${commentAuthor}'s comment in the same language as the comment. Start your reply with @${commentAuthor}.`
+          }
+        });
+        
+        if (!aiResult.success) {
+          showNotification('❌ AI failed to generate reply: ' + aiResult.error, 'error');
+          return;
+        }
+        
+        const aiReply = aiResult.reply;
+        const finalReply = aiReply.includes(`@${commentAuthor}`) ? aiReply : `@${commentAuthor} ${aiReply}`;
+        
+        showNotification('📤 Posting AI reply...', 'info');
+        
+        const result = await window.electronAPI.replyToPost({ 
+          postId: postIdFromBtn, 
+          body: finalReply,
+          commentId: commentId
+        });
+        
+        if (result.success) {
+          showNotification('✅ AI reply posted successfully!', 'success');
+          await loadPostComments(postIdFromBtn);
+        } else {
+          showNotification('❌ Failed to post reply: ' + result.error, 'error');
+        }
+      } catch (error) {
+        console.error('[App] ❌ Auto AI reply error:', error);
+        showNotification('❌ Error: ' + error.message, 'error');
+      }
+    }
+    
+    // Handle translate button
+    if (target.classList.contains('translate-comment-btn')) {
+      const commentId = target.dataset.commentId;
+      
+      if (window.languageManager) {
+        await window.languageManager.translateComment(commentId);
+      } else {
+        showNotification('❌ Translation system not available', 'error');
+      }
+    }
+  });
+}
+
 // Agent Profile & Rewards functionality
 function initializeAgentProfile() {
   console.log('[Profile] ========== INITIALIZING AGENT PROFILE ==========');

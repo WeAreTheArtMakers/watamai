@@ -203,6 +203,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Submolts
   getSubmolts: () => ipcRenderer.invoke('get-submolts'),
   createSubmolt: (data) => ipcRenderer.invoke('create-submolt', data),
+  getSubmoltInfo: (name) => ipcRenderer.invoke('get-submolt-info', { name }),
+  updateSubmoltSettings: (data) => ipcRenderer.invoke('update-submolt-settings', data),
+  uploadSubmoltImage: (data) => ipcRenderer.invoke('upload-submolt-image', data),
+  pinPost: (postId) => ipcRenderer.invoke('pin-post', { postId }),
+  unpinPost: (postId) => ipcRenderer.invoke('unpin-post', { postId }),
+  addModerator: (data) => ipcRenderer.invoke('add-moderator', data),
+  removeModerator: (data) => ipcRenderer.invoke('remove-moderator', data),
+  listModerators: (submoltName) => ipcRenderer.invoke('list-moderators', { submoltName }),
 
   // User Management - NEW
   searchUser: (username) => ipcRenderer.invoke('search-user', username),
@@ -228,6 +236,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeAvatar: () => ipcRenderer.invoke('remove-avatar'),
   updateProfile: (description) => ipcRenderer.invoke('update-profile', description),
 
+  // AI Activity - NEW
+  getAIReplies: () => ipcRenderer.invoke('get-ai-replies'),
+  clearAIReplies: () => ipcRenderer.invoke('clear-ai-replies'),
+
   // Translation - NEW
   translateText: (data) => ipcRenderer.invoke('translate-text', data),
+  
+  // Voting System - NEW
+  upvotePost: (data) => ipcRenderer.invoke('upvote-post', data),
+  downvotePost: (data) => ipcRenderer.invoke('downvote-post', data),
+  upvoteComment: (data) => ipcRenderer.invoke('upvote-comment', data),
+  
+  // Submolt Subscription - NEW
+  subscribeSubmolt: (data) => ipcRenderer.invoke('subscribe-submolt', data),
+  unsubscribeSubmolt: (data) => ipcRenderer.invoke('unsubscribe-submolt', data),
 });

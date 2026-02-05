@@ -4,6 +4,21 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
+// CRITICAL: Increase Chromium memory limits BEFORE app initialization
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096'); // 4GB heap
+app.commandLine.appendSwitch('disable-renderer-backgrounding'); // Keep renderer active
+app.commandLine.appendSwitch('disable-background-timer-throttling'); // Prevent throttling
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('disable-breakpad'); // Reduce memory overhead
+app.commandLine.appendSwitch('disable-component-extensions-with-background-pages');
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion'); // Reduce CPU/memory
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder'); // Hardware acceleration
+
+console.log('[Main] ⚡ Memory optimization flags enabled');
+console.log('[Main] - V8 heap size: 4096 MB');
+console.log('[Main] - Renderer backgrounding: disabled');
+console.log('[Main] - Timer throttling: disabled');
+
 // Load environment variables from .env file
 const dotenvPath = path.join(__dirname, '..', '.env');
 console.log('[Main] Loading .env from:', dotenvPath);
@@ -1626,6 +1641,12 @@ function createWindow() {
       disableBlinkFeatures: '',
       // CRITICAL: Disable cache to force reload after fixes
       cache: false,
+      // Memory optimization flags
+      additionalArguments: [
+        '--js-flags=--max-old-space-size=4096', // Increase V8 heap to 4GB
+        '--disable-gpu-vsync', // Reduce GPU memory usage
+        '--disable-software-rasterizer',
+      ],
     },
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0a0a0a',
@@ -2290,7 +2311,7 @@ ipcMain.handle('publish-post', async (event, data) => {
     const url = `${MOLTBOOK_BASE_URL}/api/v1/posts`;
 
     const postData = JSON.stringify({
-      submolt: data.submolt,
+      submolt: data.submolt.replace(/^m\//, ''), // Remove 'm/' prefix if present
       title: data.title,
       content: data.body, // Moltbook API uses 'content', not 'body'
     });
@@ -3489,11 +3510,30 @@ ipcMain.handle('get-submolts', async () => {
   try {
     console.log('[Submolts] Fetching submolts from Moltbook...');
     
+    const agent = store.getAgent();
+    if (!agent) {
+      console.warn('[Submolts] No agent registered, fetching public submolts');
+    }
+    
     const https = require('https');
-    const url = `${MOLTBOOK_BASE_URL}/api/v1/submolts`;
+    const url = new URL(`${MOLTBOOK_BASE_URL}/api/v1/submolts`);
+    
+    const options = {
+      hostname: url.hostname,
+      path: url.pathname + url.search,
+      method: 'GET',
+      headers: {}
+    };
+    
+    // Add auth header if agent exists
+    if (agent && agent.apiKeyObfuscated) {
+      const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+      options.headers['Authorization'] = `Bearer ${apiKey}`;
+      console.log('[Submolts] Using authenticated request');
+    }
     
     return new Promise((resolve, reject) => {
-      https.get(url, (res) => {
+      const req = https.request(options, (res) => {
         let data = '';
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
@@ -3528,6 +3568,10 @@ ipcMain.handle('get-submolts', async () => {
                   return s;
                 });
                 
+                // Log owned/moderated submolts
+                const ownedSubmolts = submolts.filter(s => s.your_role === 'owner' || s.your_role === 'moderator');
+                console.log('[Submolts] Found', ownedSubmolts.length, 'owned/moderated submolts:', ownedSubmolts.map(s => s.name));
+                
                 resolve({ success: true, submolts });
               } else {
                 console.error('[Submolts] ❌ Invalid response format');
@@ -3542,10 +3586,14 @@ ipcMain.handle('get-submolts', async () => {
             resolve({ success: false, error: `HTTP ${res.statusCode}` });
           }
         });
-      }).on('error', (e) => {
+      });
+      
+      req.on('error', (e) => {
         console.error('[Submolts] ❌ Request error:', e);
         resolve({ success: false, error: e.message });
       });
+      
+      req.end();
     });
   } catch (error) {
     console.error('[Submolts] ❌ Failed to fetch submolts:', error);
@@ -3620,6 +3668,487 @@ ipcMain.handle('create-submolt', async (event, { name, displayName, description 
     });
   } catch (error) {
     console.error('[Submolt] ❌ Failed to create submolt:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get submolt info
+ipcMain.handle('get-submolt-info', async (event, { name }) => {
+  try {
+    console.log('[Submolt] Getting info for:', name);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/submolts/${name}`,
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/2.2.1',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: true, submolt: parsed });
+            } catch (e) {
+              resolve({ success: false, error: 'Invalid JSON response' });
+            }
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: false, error: parsed.error || `HTTP ${res.statusCode}` });
+            } catch (e) {
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Update submolt settings
+ipcMain.handle('update-submolt-settings', async (event, { submoltName, description, bannerColor, themeColor }) => {
+  try {
+    console.log('[Submolt] Updating settings for:', submoltName);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    const updateData = {};
+    if (description !== undefined) updateData.description = description;
+    if (bannerColor) updateData.banner_color = bannerColor;
+    if (themeColor) updateData.theme_color = themeColor;
+    
+    const postData = JSON.stringify(updateData);
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/submolts/${submoltName}/settings`,
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+          'User-Agent': 'WATAM-AI/2.2.1',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: true, submolt: parsed });
+            } catch (e) {
+              resolve({ success: false, error: 'Invalid JSON response' });
+            }
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: false, error: parsed.error || `HTTP ${res.statusCode}` });
+            } catch (e) {
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.write(postData);
+      req.end();
+    });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Upload submolt image (avatar or banner)
+ipcMain.handle('upload-submolt-image', async (event, { submoltName, filePath, type }) => {
+  try {
+    console.log('[Submolt] Uploading', type, 'for:', submoltName);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const fs = require('fs');
+    const path = require('path');
+    const https = require('https');
+    
+    // Read file
+    const fileBuffer = fs.readFileSync(filePath);
+    const fileName = path.basename(filePath);
+    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+    
+    // Build multipart form data
+    const formData = [];
+    formData.push(`--${boundary}\r\n`);
+    formData.push(`Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n`);
+    formData.push(`Content-Type: ${type === 'avatar' ? 'image/png' : 'image/jpeg'}\r\n\r\n`);
+    
+    const header = Buffer.from(formData.join(''));
+    const footer = Buffer.from(`\r\n--${boundary}\r\nContent-Disposition: form-data; name="type"\r\n\r\n${type}\r\n--${boundary}--\r\n`);
+    const postData = Buffer.concat([header, fileBuffer, footer]);
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/submolts/${submoltName}/settings`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': postData.length,
+          'User-Agent': 'WATAM-AI/2.2.1',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: true, submolt: parsed });
+            } catch (e) {
+              resolve({ success: false, error: 'Invalid JSON response' });
+            }
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: false, error: parsed.error || `HTTP ${res.statusCode}` });
+            } catch (e) {
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.write(postData);
+      req.end();
+    });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Pin a post
+ipcMain.handle('pin-post', async (event, { postId }) => {
+  try {
+    console.log('[Submolt] Pinning post:', postId);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/posts/${postId}/pin`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/2.2.1',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            resolve({ success: true });
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: false, error: parsed.error || `HTTP ${res.statusCode}` });
+            } catch (e) {
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Unpin a post
+ipcMain.handle('unpin-post', async (event, { postId }) => {
+  try {
+    console.log('[Submolt] Unpinning post:', postId);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/posts/${postId}/pin`,
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/2.2.1',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            resolve({ success: true });
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: false, error: parsed.error || `HTTP ${res.statusCode}` });
+            } catch (e) {
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Add moderator
+ipcMain.handle('add-moderator', async (event, { submoltName, agentName, role }) => {
+  try {
+    console.log('[Submolt] Adding moderator:', agentName, 'to', submoltName);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    const postData = JSON.stringify({
+      agent_name: agentName,
+      role: role || 'moderator'
+    });
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/submolts/${submoltName}/moderators`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+          'User-Agent': 'WATAM-AI/2.2.1',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            resolve({ success: true });
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: false, error: parsed.error || `HTTP ${res.statusCode}` });
+            } catch (e) {
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.write(postData);
+      req.end();
+    });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Remove moderator
+ipcMain.handle('remove-moderator', async (event, { submoltName, agentName }) => {
+  try {
+    console.log('[Submolt] Removing moderator:', agentName, 'from', submoltName);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    const postData = JSON.stringify({
+      agent_name: agentName
+    });
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/submolts/${submoltName}/moderators`,
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+          'User-Agent': 'WATAM-AI/2.2.1',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            resolve({ success: true });
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: false, error: parsed.error || `HTTP ${res.statusCode}` });
+            } catch (e) {
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.write(postData);
+      req.end();
+    });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// List moderators
+ipcMain.handle('list-moderators', async (event, { submoltName }) => {
+  try {
+    console.log('[Submolt] Listing moderators for:', submoltName);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/submolts/${submoltName}/moderators`,
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/2.2.1',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: true, moderators: parsed.moderators || parsed });
+            } catch (e) {
+              resolve({ success: false, error: 'Invalid JSON response' });
+            }
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: false, error: parsed.error || `HTTP ${res.statusCode}` });
+            } catch (e) {
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
     return { success: false, error: error.message };
   }
 });
@@ -3991,7 +4520,7 @@ ipcMain.handle('search-user', async (event, username) => {
 // END USER MANAGEMENT API HANDLERS
 // ============================================
 
-ipcMain.handle('reply-to-post', async (event, { postId, body }) => {
+ipcMain.handle('reply-to-post', async (event, { postId, body, commentId }) => {
   try {
     console.log('[Reply] ========================================');
     console.log('[Reply] Replying to post:', postId);
@@ -4098,7 +4627,13 @@ ipcMain.handle('reply-to-post', async (event, { postId, body }) => {
     const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
     console.log('[Reply] Using API key for POST request:', maskApiKey(apiKey));
 
-    const postData = JSON.stringify({ content: body }); // Moltbook API uses 'content'
+    // Build request body - add parent_id if replying to a comment
+    const requestBody = { content: body };
+    if (commentId) {
+      requestBody.parent_id = commentId;
+      console.log('[Reply] Adding parent_id for nested reply:', commentId);
+    }
+    const postData = JSON.stringify(requestBody);
 
     const result = await new Promise((resolve, reject) => {
       // Set timeout for slow Moltbook server (2 minutes)
@@ -6002,6 +6537,26 @@ async function runAgentLoop() {
     const repliesToday = store.get('agentRepliesToday', 0);
     store.set('agentRepliesToday', repliesToday + 1);
     
+    // CRITICAL: Store detailed AI reply for activity tracking
+    const aiReplies = store.get('aiReplies', []);
+    aiReplies.unshift({
+      id: Date.now(),
+      postId: post.id,
+      postTitle: post.title,
+      postBody: post.body || post.content || '',
+      postAuthor: post.author?.name || post.author || 'Unknown',
+      submolt: post.submolt,
+      reply: replyResult.reply,
+      replyContext: replyResult.context || '', // Store what AI was replying to (comment or post)
+      timestamp: new Date().toISOString(),
+      success: true
+    });
+    // Keep only last 100 replies
+    if (aiReplies.length > 100) {
+      aiReplies.length = 100;
+    }
+    store.set('aiReplies', aiReplies);
+    
     console.log('[AI] ========================================');
     console.log('[AI] 🎉 SUCCESS! Reply posted successfully');
     console.log('[AI] 📊 Stats:', {
@@ -7672,6 +8227,365 @@ ipcMain.handle('update-profile', async (event, description) => {
       req.end();
     });
   } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================
+// AI ACTIVITY API HANDLERS
+// ============================================
+
+// Get AI replies
+ipcMain.handle('get-ai-replies', async () => {
+  try {
+    const aiReplies = store.get('aiReplies', []);
+    const repliesToday = store.get('agentRepliesToday', 0);
+    
+    return {
+      success: true,
+      replies: aiReplies,
+      repliesToday,
+      repliesThisHour: agentRepliesThisHour
+    };
+  } catch (error) {
+    console.error('[AIReplies] Failed to get AI replies:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Clear AI replies
+ipcMain.handle('clear-ai-replies', async () => {
+  try {
+    store.set('aiReplies', []);
+    store.set('agentRepliesToday', 0);
+    agentRepliesThisHour = 0;
+    
+    return { success: true };
+  } catch (error) {
+    console.error('[AIReplies] Failed to clear AI replies:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================
+// VOTING SYSTEM
+// ============================================
+
+// Upvote a post
+ipcMain.handle('upvote-post', async (event, { postId }) => {
+  try {
+    console.log('[Vote] Upvoting post:', postId);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/posts/${postId}/upvote`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/2.2.1',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          console.log('[Vote] Upvote response status:', res.statusCode);
+          console.log('[Vote] Upvote response data:', data);
+          
+          if (res.statusCode === 200) {
+            try {
+              const parsed = JSON.parse(data);
+              console.log('[Vote] ✅ Post upvoted successfully');
+              resolve({ success: true, ...parsed });
+            } catch (e) {
+              resolve({ success: false, error: 'Invalid JSON response' });
+            }
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: false, error: parsed.error || `HTTP ${res.statusCode}` });
+            } catch (e) {
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        console.error('[Vote] Request error:', e);
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('[Vote] ❌ Failed to upvote post:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Downvote a post
+ipcMain.handle('downvote-post', async (event, { postId }) => {
+  try {
+    console.log('[Vote] Downvoting post:', postId);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/posts/${postId}/downvote`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/2.2.1',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          console.log('[Vote] Downvote response status:', res.statusCode);
+          console.log('[Vote] Downvote response data:', data);
+          
+          if (res.statusCode === 200) {
+            try {
+              const parsed = JSON.parse(data);
+              console.log('[Vote] ✅ Post downvoted successfully');
+              resolve({ success: true, ...parsed });
+            } catch (e) {
+              resolve({ success: false, error: 'Invalid JSON response' });
+            }
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: false, error: parsed.error || `HTTP ${res.statusCode}` });
+            } catch (e) {
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        console.error('[Vote] Request error:', e);
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('[Vote] ❌ Failed to downvote post:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Upvote a comment
+ipcMain.handle('upvote-comment', async (event, { commentId }) => {
+  try {
+    console.log('[Vote] Upvoting comment:', commentId);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/comments/${commentId}/upvote`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/2.2.1',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          console.log('[Vote] Upvote comment response status:', res.statusCode);
+          console.log('[Vote] Upvote comment response data:', data);
+          
+          if (res.statusCode === 200) {
+            try {
+              const parsed = JSON.parse(data);
+              console.log('[Vote] ✅ Comment upvoted successfully');
+              resolve({ success: true, ...parsed });
+            } catch (e) {
+              resolve({ success: false, error: 'Invalid JSON response' });
+            }
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: false, error: parsed.error || `HTTP ${res.statusCode}` });
+            } catch (e) {
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        console.error('[Vote] Request error:', e);
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('[Vote] ❌ Failed to upvote comment:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================
+// SUBMOLT SUBSCRIPTION
+// ============================================
+
+// Subscribe to submolt
+ipcMain.handle('subscribe-submolt', async (event, { submoltName }) => {
+  try {
+    console.log('[Submolt] Subscribing to:', submoltName);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/submolts/${submoltName}/subscribe`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/2.2.1',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          console.log('[Submolt] Subscribe response status:', res.statusCode);
+          console.log('[Submolt] Subscribe response data:', data);
+          
+          if (res.statusCode === 200) {
+            try {
+              const parsed = JSON.parse(data);
+              console.log('[Submolt] ✅ Subscribed successfully');
+              resolve({ success: true, ...parsed });
+            } catch (e) {
+              resolve({ success: true }); // Some APIs return empty response
+            }
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: false, error: parsed.error || `HTTP ${res.statusCode}` });
+            } catch (e) {
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        console.error('[Submolt] Request error:', e);
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('[Submolt] ❌ Failed to subscribe:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Unsubscribe from submolt
+ipcMain.handle('unsubscribe-submolt', async (event, { submoltName }) => {
+  try {
+    console.log('[Submolt] Unsubscribing from:', submoltName);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/submolts/${submoltName}/subscribe`,
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/2.2.1',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          console.log('[Submolt] Unsubscribe response status:', res.statusCode);
+          console.log('[Submolt] Unsubscribe response data:', data);
+          
+          if (res.statusCode === 200) {
+            try {
+              const parsed = JSON.parse(data);
+              console.log('[Submolt] ✅ Unsubscribed successfully');
+              resolve({ success: true, ...parsed });
+            } catch (e) {
+              resolve({ success: true }); // Some APIs return empty response
+            }
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: false, error: parsed.error || `HTTP ${res.statusCode}` });
+            } catch (e) {
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        console.error('[Submolt] Request error:', e);
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('[Submolt] ❌ Failed to unsubscribe:', error);
     return { success: false, error: error.message };
   }
 });

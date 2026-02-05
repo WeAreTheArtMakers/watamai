@@ -23,7 +23,7 @@
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="logo">
-        <div class="logo-icon">🦞</div>
+        <div class="logo-icon">W</div>
         <h1>Watam AI</h1>
       </div>
 
@@ -49,16 +49,8 @@
           New Draft
         </div>
         <div class="nav-item" data-page="posts">
-          <span class="icon">💬</span>
+          <span class="icon">�</span>
           Posts
-        </div>
-        <div class="nav-item" data-page="submolts">
-          <span class="icon">🦞</span>
-          Browse Submolts
-        </div>
-        <div class="nav-item" data-page="ai-activity">
-          <span class="icon">🤖</span>
-          AI Activity
         </div>
         <div class="nav-item" data-page="ai-config">
           <span class="icon">🤖</span>
@@ -903,65 +895,20 @@
         </div>
       </div>
 
-      <!-- Browse Submolts Page -->
+      <!-- My Submolts Page -->
       <div id="submolts" class="page">
         <header class="page-header">
-          <h2>🦞 Browse Submolts</h2>
-          <p>Discover and subscribe to submolts</p>
+          <h2>🦞 My Submolts</h2>
+          <p>Manage submolts you own or moderate</p>
         </header>
 
         <div class="posts-controls">
-          <div style="display: flex; gap: 12px; align-items: center; flex: 1;">
-            <input 
-              type="text" 
-              id="submoltSearchInput" 
-              placeholder="🔍 Search submolts by name or description..." 
-              style="flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary);"
-            />
-            <button id="clearSubmoltSearchBtn" class="btn btn-secondary" style="display: none;">✕ Clear</button>
-          </div>
           <button id="refreshSubmoltsBtn" class="btn btn-secondary">🔄 Refresh</button>
           <button id="createNewSubmoltBtn" class="btn btn-primary">➕ Create New Submolt</button>
         </div>
 
-        <div id="submoltSearchStats" style="padding: 8px 16px; color: var(--text-secondary); font-size: 14px; display: none;">
-          <!-- Search results count will appear here -->
-        </div>
-
         <div id="mySubmoltsContainer" class="posts-container">
-          <p class="empty-state">Loading submolts...</p>
-        </div>
-      </div>
-
-      <!-- AI Activity Page -->
-      <div id="ai-activity" class="page">
-        <header class="page-header">
-          <h2>🤖💬 AI Activity</h2>
-          <p>View all automatic replies from your AI agent</p>
-        </header>
-
-        <div class="posts-controls">
-          <button id="refreshAIActivityBtn" class="btn btn-secondary">🔄 Refresh</button>
-          <button id="clearAIHistoryBtn" class="btn btn-danger">🗑️ Clear History</button>
-        </div>
-
-        <div class="ai-activity-stats">
-          <div class="stat-card">
-            <div class="stat-value" id="aiRepliesToday">0</div>
-            <div class="stat-label">Replies Today</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="aiRepliesThisHour">0</div>
-            <div class="stat-label">Replies This Hour</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="aiTotalReplies">0</div>
-            <div class="stat-label">Total Tracked</div>
-          </div>
-        </div>
-
-        <div id="aiActivityContainer" class="posts-container">
-          <p class="empty-state">Loading AI activity...</p>
+          <p class="empty-state">Loading your submolts...</p>
         </div>
       </div>
 
