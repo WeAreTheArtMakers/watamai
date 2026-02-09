@@ -1338,6 +1338,20 @@ async function checkMoltbookStatus(apiKey, agentName = null) {
             resolve({ status: 'error', statusCode: res.statusCode, message: 'Invalid JSON response from Moltbook API' });
           }
         } else if (res.statusCode === 401) {
+          // Parse response to check if account is suspended
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.error === 'Account suspended' || (parsed.hint && parsed.hint.includes('suspended'))) {
+              console.error('[Moltbook] ❌ 401 - Account suspended');
+              console.error('[Moltbook] 💡 Reason:', parsed.hint || 'Unknown');
+              console.error('[Moltbook] 💡 If you verified via X but don\'t have a Moltbook login, set up your email in Settings');
+              resolve({ status: 'suspended', statusCode: res.statusCode, message: parsed.hint || 'Account suspended', error: parsed.error });
+              return;
+            }
+          } catch (e) {
+            // JSON parse failed, continue with normal 401 handling
+          }
+          
           console.error('[Moltbook] ❌ 401 Unauthorized - API key invalid or expired');
           console.error('[Moltbook] 💡 Solutions:');
           console.error('[Moltbook] - Re-register your agent');
@@ -2229,6 +2243,65 @@ ipcMain.handle('moltbook-reset-agent', async () => {
     store.audit('moltbook.agent_reset', {});
     return { success: true };
   } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+});
+
+ipcMain.handle('moltbook-setup-owner-email', async (event, { email }) => {
+  try {
+    console.log('[Moltbook] Setting up owner email:', email);
+    store.audit('moltbook.setup_owner_email.attempt', { email });
+    
+    const agent = store.getAgent();
+    if (!agent || !agent.apiKeyObfuscated) {
+      console.error('[Moltbook] No agent or API key found');
+      return {
+        success: false,
+        error: 'No agent found. Please register or load an agent first.',
+      };
+    }
+    
+    // Deobfuscate API key
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    console.log('[Moltbook] Using API key:', maskApiKey(apiKey));
+    
+    const response = await fetch('https://www.moltbook.com/api/v1/agents/me/setup-owner-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ email }),
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      console.error('[Moltbook] Email setup failed:', response.status, data);
+      store.audit('moltbook.setup_owner_email.error', { 
+        status: response.status, 
+        error: data.error || data.hint 
+      });
+      return {
+        success: false,
+        error: data.error || data.hint || `HTTP ${response.status}`,
+        statusCode: response.status,
+      };
+    }
+    
+    console.log('[Moltbook] ✅ Email setup successful');
+    store.audit('moltbook.setup_owner_email.success', { email });
+    
+    return {
+      success: true,
+      message: data.message || 'Email setup initiated. Check your inbox for verification link.',
+    };
+  } catch (error) {
+    console.error('[Moltbook] Email setup error:', error);
+    store.audit('moltbook.setup_owner_email.error', { error: error.message });
     return {
       success: false,
       error: error.message,
@@ -3692,7 +3765,7 @@ ipcMain.handle('get-submolt-info', async (event, { name }) => {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'User-Agent': 'WATAM-AI/2.2.1',
+          'User-Agent': 'WATAM-AI/2.3.0',
         },
       };
       
@@ -3758,7 +3831,7 @@ ipcMain.handle('update-submolt-settings', async (event, { submoltName, descripti
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(postData),
-          'User-Agent': 'WATAM-AI/2.2.1',
+          'User-Agent': 'WATAM-AI/2.3.0',
         },
       };
       
@@ -3835,7 +3908,7 @@ ipcMain.handle('upload-submolt-image', async (event, { submoltName, filePath, ty
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': `multipart/form-data; boundary=${boundary}`,
           'Content-Length': postData.length,
-          'User-Agent': 'WATAM-AI/2.2.1',
+          'User-Agent': 'WATAM-AI/2.3.0',
         },
       };
       
@@ -3893,7 +3966,7 @@ ipcMain.handle('pin-post', async (event, { postId }) => {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'User-Agent': 'WATAM-AI/2.2.1',
+          'User-Agent': 'WATAM-AI/2.3.0',
         },
       };
       
@@ -3945,7 +4018,7 @@ ipcMain.handle('unpin-post', async (event, { postId }) => {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'User-Agent': 'WATAM-AI/2.2.1',
+          'User-Agent': 'WATAM-AI/2.3.0',
         },
       };
       
@@ -4004,7 +4077,7 @@ ipcMain.handle('add-moderator', async (event, { submoltName, agentName, role }) 
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(postData),
-          'User-Agent': 'WATAM-AI/2.2.1',
+          'User-Agent': 'WATAM-AI/2.3.0',
         },
       };
       
@@ -4063,7 +4136,7 @@ ipcMain.handle('remove-moderator', async (event, { submoltName, agentName }) => 
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(postData),
-          'User-Agent': 'WATAM-AI/2.2.1',
+          'User-Agent': 'WATAM-AI/2.3.0',
         },
       };
       
@@ -4116,7 +4189,7 @@ ipcMain.handle('list-moderators', async (event, { submoltName }) => {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'User-Agent': 'WATAM-AI/2.2.1',
+          'User-Agent': 'WATAM-AI/2.3.0',
         },
       };
       
@@ -6592,11 +6665,28 @@ async function runAgentLoop() {
     console.error('[AI] ========================================');
     console.error('[AI] ❌ AGENT LOOP ERROR:', error.message);
     console.error('[AI] 🔍 Error details:', error);
-    console.error('[AI] 💡 This could be:');
-    console.error('[AI] - Network connectivity issues');
-    console.error('[AI] - Moltbook server problems');
-    console.error('[AI] - Configuration issues');
-    console.error('[AI] - Code bugs (please report)');
+    
+    // Check if it's a suspended account error
+    if (error.message && (error.message.includes('Account suspended') || error.message.includes('suspended'))) {
+      console.error('[AI] 💡 Account is suspended!');
+      console.error('[AI] 💡 If you verified via X but don\'t have a Moltbook login, set up your email in Settings');
+      
+      // Update agent status to suspended
+      const agent = store.getAgent();
+      if (agent) {
+        agent.status = 'suspended';
+        agent.updatedAt = new Date().toISOString();
+        store.saveAgent(agent);
+        console.log('[AI] ✅ Updated agent status to: suspended');
+      }
+    } else {
+      console.error('[AI] 💡 This could be:');
+      console.error('[AI] - Network connectivity issues');
+      console.error('[AI] - Moltbook server problems');
+      console.error('[AI] - Configuration issues');
+      console.error('[AI] - Code bugs (please report)');
+    }
+    
     console.error('[AI] ========================================');
     store.audit('ai.agent_error', { error: error.message, stack: error.stack });
   }
@@ -8291,7 +8381,7 @@ ipcMain.handle('upvote-post', async (event, { postId }) => {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'User-Agent': 'WATAM-AI/2.2.1',
+          'User-Agent': 'WATAM-AI/2.3.0',
         },
       };
       
@@ -8354,7 +8444,7 @@ ipcMain.handle('downvote-post', async (event, { postId }) => {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'User-Agent': 'WATAM-AI/2.2.1',
+          'User-Agent': 'WATAM-AI/2.3.0',
         },
       };
       
@@ -8417,7 +8507,7 @@ ipcMain.handle('upvote-comment', async (event, { commentId }) => {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'User-Agent': 'WATAM-AI/2.2.1',
+          'User-Agent': 'WATAM-AI/2.3.0',
         },
       };
       
@@ -8460,6 +8550,69 @@ ipcMain.handle('upvote-comment', async (event, { commentId }) => {
   }
 });
 
+// Downvote a comment
+ipcMain.handle('downvote-comment', async (event, { commentId }) => {
+  try {
+    console.log('[Vote] Downvoting comment:', commentId);
+    
+    const agent = store.getAgent();
+    if (!agent) {
+      return { success: false, error: 'No agent registered' };
+    }
+    
+    const apiKey = deobfuscateKey(agent.apiKeyObfuscated);
+    const https = require('https');
+    
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'www.moltbook.com',
+        path: `/api/v1/comments/${commentId}/downvote`,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'User-Agent': 'WATAM-AI/2.3.0',
+        },
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          console.log('[Vote] Downvote comment response status:', res.statusCode);
+          console.log('[Vote] Downvote comment response data:', data);
+          
+          if (res.statusCode === 200) {
+            try {
+              const parsed = JSON.parse(data);
+              console.log('[Vote] ✅ Comment downvoted successfully');
+              resolve({ success: true, ...parsed });
+            } catch (e) {
+              resolve({ success: false, error: 'Invalid JSON response' });
+            }
+          } else {
+            try {
+              const parsed = JSON.parse(data);
+              resolve({ success: false, error: parsed.error || `HTTP ${res.statusCode}` });
+            } catch (e) {
+              resolve({ success: false, error: `HTTP ${res.statusCode}` });
+            }
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        console.error('[Vote] Request error:', e);
+        resolve({ success: false, error: e.message });
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('[Vote] ❌ Failed to downvote comment:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // ============================================
 // SUBMOLT SUBSCRIPTION
 // ============================================
@@ -8484,7 +8637,7 @@ ipcMain.handle('subscribe-submolt', async (event, { submoltName }) => {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'User-Agent': 'WATAM-AI/2.2.1',
+          'User-Agent': 'WATAM-AI/2.3.0',
         },
       };
       
@@ -8547,7 +8700,7 @@ ipcMain.handle('unsubscribe-submolt', async (event, { submoltName }) => {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
-          'User-Agent': 'WATAM-AI/2.2.1',
+          'User-Agent': 'WATAM-AI/2.3.0',
         },
       };
       
